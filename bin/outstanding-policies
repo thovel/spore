@@ -155,9 +155,10 @@ function ensure_policy_user() {
 }
 
 function ensure_policy() {
+  local dir
   for dir in "$1/users/"* ; do
     if [ -d "$dir" ] ; then
-      ensure_policy_user $dir
+      ensure_policy_user "$dir"
     else
       echo "# ignoring non-directory $dir"
     fi
@@ -166,10 +167,6 @@ function ensure_policy() {
 
 policy=$1
 
-if [[ -z "$1" || ! -d "$1" ]] ; then
-  echo "# policy '$1' not specified or exists"
-  return 2
-fi
-
-ensure_policy
+[[ ! -z "$1" && -d "$1" ]] &&
+  ensure_policy "$1"
 
