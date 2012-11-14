@@ -1,22 +1,25 @@
 #!/bin/bash
 
-# Ensure user will emit commands that are needed to be run in order
-# for the local system to comply with a policy
+# The outstanding-policies command will emit commands that are needed
+# to be run in order for the local system to comply with a policy
 
+
+## Get the configuration value of a key $1 from a simple config file $2.
 function get() {
   sed -n "/^$2=/s/$2=//p" "$1" | head -n 1
 }
 
 
-
 ## Ensures that the directory $2 exists, and if it isn't
-## create it with the specified mode $1.
+## create it with the specified octal mode $1.
 function ensure_dir_exists() {
   local perms="$(stat -c %a "$2")"
   if [ ! -d $sshdir ] ; then
     echo "mkdir --mode $1 '$2'"
   fi
-fi
+}
+
+
 ## Ensures that the permissions $1 are set for a file $2
 function ensure_permissions() {
   local perms="$(stat -c %a "$2")"
@@ -25,6 +28,7 @@ function ensure_permissions() {
     return 1
   fi
 }
+
 
 ## Ensures that a user $1 owns a file $2
 function ensure_user_owns() {
@@ -35,12 +39,18 @@ function ensure_user_owns() {
   fi
 }
 
-### Ensures that keys in a keyfile $1 are present for a user's authorized_keys $2.
+
+## Ensures that keys in a keyfile $1 are present for a user's
+## authorized_keys file $2.
+## If the keyfile contains more than one key, abort
 function ensure_key_present() {
   # Algorithm:
   # read each line,
-  # if any line is identical to $2 OK it.
-  # if any line is 
+  # if any line is identical to $2, return
+  # if end of loop, emit command to add to the file.
+  while read line ; do
+    
+  done < "$2"
 }
 
 ## Ensures that the .ssh/authorized_keys has the keys
@@ -50,7 +60,7 @@ function ensure_ssh_keys() {
   local keydir="$1/ssh-keys"
   if [ ! -d "$keydir" ] ; then
     echo "# ignoring $user_name's keys, since keydir $keydir is missing."
-    return
+    return 0
   fi
   sshdir=~"$user_name"/.ssh
   ensure_dir_exists 700 $sshdir || return 1
@@ -67,6 +77,13 @@ function ensure_ssh_keys() {
       ensure_key_absent $key $sshdir/authorized_keys || return 1
     fi
   done
+  if [ -r $sshdir/authorized_keys ] ; then
+    ensure_user_owns $user_name $sshdir/authorized_keys || return 1
+    ensure_permissions 600 $sshdir/authorized_keys || return 1
+  fi
+  # TODO: ensure that no other keys are present (by counting them?)
+  # e.g.
+  # wc -l authorized_keys; ls -1 keydir/*.pub | wc -l
 }
 
 function ensure_policy_user() {
