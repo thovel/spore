@@ -13,9 +13,9 @@ function get() {
 ## Ensures that the directory $2 exists, and if it isn't
 ## create it with the specified octal mode $1.
 function ensure_dir_exists() {
-  local perms="$(stat -c %a "$2")"
   if [ ! -d $sshdir ] ; then
     echo "mkdir --mode $1 '$2'"
+    return 1
   fi
 }
 
@@ -49,14 +49,17 @@ function ensure_key_present() {
   # if any line is identical to $2, return
   # if end of loop, emit command to add to the file.
   keyline=$(< "$1")
-  while read line ; do
-    if [ "$line" == "$keyline" ] ; then
-      # We found it!  Nothing to do here
-      return
-    fi
-  done < "$2"
+  if [ -r $2 ] ; then
+    while read line ; do
+      if [ "$line" == "$keyline" ] ; then
+        # We found it!  Nothing to do here
+        return
+      fi
+    done < "$2"
+  fi
   # $keyline was not found...
-  echo echo \'${keyline}\' '|' tee '>'/dev/null -a \'"$1"\'
+  # TODO: remove apostrophes in output? ugh...
+  echo echo \'${keyline}\' '|' tee '>'/dev/null -a \'"$2"\'
   return 1
 }
 
@@ -69,7 +72,7 @@ function ensure_ssh_keys() {
     echo "# ignoring $user_name's keys, since keydir $keydir is missing."
     return 0
   fi
-  sshdir=~"$user_name"/.ssh
+  sshdir=$(eval echo ~"$user_name"/.ssh)
   ensure_dir_exists 700 $sshdir || return 1
   ensure_user_owns $user_name $sshdir || return 1
   ensure_permissions 700 $sshdir || return 1
@@ -99,7 +102,6 @@ function ensure_policy_user() {
     echo "# $person does not have a person definition."
     return;
   fi
-  user_name
   user_name=$(get "$person" user_name)
   if [ -z "$user_name" ] ; then
     echo "# $person does not have a user_name; ignoring."
