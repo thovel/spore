@@ -131,8 +131,9 @@ function ensure_policy_user() {
     echo "# $person does not have a user_name; ignoring."
     return;
   fi
+  user_full=$(get "$person" name full)
   if ! getent passwd $user_name >/dev/null; then
-    echo "useradd --create-home $user_name"
+    echo "useradd --create-home  --comment '$user_full' '$user_name'"
     return
   fi
 
