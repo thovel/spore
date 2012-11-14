@@ -48,7 +48,7 @@ function ensure_key_present() {
   # read each line,
   # if any line is identical to $2, return
   # if end of loop, emit command to add to the file.
-  keyline=$(< "$1")
+  local keyline=$(< "$1")
   if [ -r $2 ] ; then
     while read line ; do
       if [ "$line" == "$keyline" ] ; then
@@ -61,6 +61,23 @@ function ensure_key_present() {
   # TODO: remove apostrophes in output? ugh...
   echo echo \'${keyline}\' '|' tee '>'/dev/null -a \'"$2"\'
   return 1
+}
+
+## Ensures that the key in a keyfile $1 are absent (and removed if
+## they're found) for a user's authorized_keys file $2.
+## If the keyfile contains more than one key, abort
+function ensure_key_absent() {
+  local key="$(sed < "$1" -n 's/.*\b\(ssh-dss\|ssh-rsa\) \([^ ]*\).*/\2/p')"
+  if [ -z "$key" ] ; then
+    echo "# unable to parse key file $1 for blacklisting."
+    return
+  fi
+  if [ -r "$2" ] ; then
+    if grep > /dev/null $key "$2" ; then
+      echo 'sed -i '\''\,'"$key"',d'\' \'$2\'
+      return 1
+    fi
+  fi
 }
 
 ## Ensures that the .ssh/authorized_keys has the keys
