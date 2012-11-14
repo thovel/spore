@@ -7,10 +7,13 @@
 ## Get the configuration value of a key $2 from section $1 from a
 ## ini-file config file $2.
 function get() {
-  sed -n "/\[$2\]/,/^\[/ {
-            /^$3=/s/$3=//p
+  # first look for any section of the file between a [$2] and a [
+  # Within that ({}) look for the "$3 =" with any whitespace interspersed.
+  # If you find it, remove everything up to the first "=".
+  # "I" is for case insensitive.
+  sed -n "/^[[:space:]]*\[$2\]/I,/^\[/ {
+            /^[[:space:]]*$3[[:space:]]*=[[:space:]]*/Is/[^=]*=[[:space:]]*//p
           }" "$1" | head -n 1
-  # TODO: accept whitespaces at beginning of line and around e.g. "="
 }
 
 
