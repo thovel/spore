@@ -1,0 +1,119 @@
+#!/bin/bash
+
+# Ensure user will emit commands that are needed to be run in order
+# for the local system to comply with a policy
+
+function get() {
+  sed -n "/^$2=/s/$2=//p" "$1" | head -n 1
+}
+
+
+
+## Ensures that the directory $2 exists, and if it isn't
+## create it with the specified mode $1.
+function ensure_dir_exists() {
+  local perms="$(stat -c %a "$2")"
+  if [ ! -d $sshdir ] ; then
+    echo "mkdir --mode $1 '$2'"
+  fi
+fi
+## Ensures that the permissions $1 are set for a file $2
+function ensure_permissions() {
+  local perms="$(stat -c %a "$2")"
+  if [ "$perms" != "$1" ] ; then
+    echo "chmod $1 '$2'"
+    return 1
+  fi
+}
+
+## Ensures that a user $1 owns a file $2
+function ensure_user_owns() {
+  local owner="$(stat -c %U "$2")"
+  if [ "$owner" != "$1" ] ; then
+    echo "chown $1: '$2'"
+    return 1
+  fi
+}
+
+### Ensures that keys in a keyfile $2 are present for a user $1.
+function ensure_key_present() {
+  sshdir=~"$1"/.ssh
+  ensure_make_dir 700 $sshdir || return 1
+  ensure_user_owns $username $sshdir || return 1
+  ensure_permissions 700 $sshdir || return 1
+}
+
+## Ensures that the .ssh/authorized_keys has the keys
+## listed in the ssh-keys directories, but none of the
+## keys that have been revoked.
+function ensure_ssh_keys() {
+  local keydir="$1/ssh-keys"
+  if [ ! -d "$keydir" ] ; then
+    echo "# ignoring $user_name's keys, since keydir $keydir is missing."
+    return
+  fi
+  local key
+  for key in "$keydir/"*.pub ; do
+    if [ -r "$key" ] ; then
+      ensure_key_present $user_name $key || return 1
+    fi
+  done
+  for key in "$keydir/"*.blacklisted ; do
+    if [ -r "$key" ] ; then
+      ensure_key_absent $user_name $key || return 1
+    fi
+  done
+}
+
+function ensure_policy_user() {
+  local person="$1/person.txt"
+  if [ ! -r "$person" ] ; then
+    echo "# $person does not have a person definition."
+    return;
+  fi
+  user_name
+  user_name=$(get "$person" user_name)
+  if [ -z "$user_name" ] ; then
+    echo "# $person does not have a user_name; ignoring."
+    return;
+  fi
+  if ! getent passwd $user_name >/dev/null; then
+    echo "useradd --create-home $user_name"
+    return
+  fi
+
+  user_groups=$(get "$person" user_groups)
+  local group;
+  for group in $user_groups ; do
+    # ensure group that the user should be added to exists
+    if ! getent group $group >/dev/null; then
+      echo "addgroup $user_name"
+      return
+    fi
+    # Add the user to the group
+    if ! group $user_name | grep > /dev/null '\b'"$group"'\b' ; then
+      echo "addgroup $user_name $group"
+      return
+    fi
+  done
+
+  ensure_ssh_keys $1
+}
+
+policy=$1
+
+if [[ -z "$1" || ! -d "$1" ]] ; then
+  echo "# policy '$1' not specified or exists"
+  exit 2
+fi
+
+for dir in "$1/users/"* ; do
+  if [ -d "$dir" ] ; then
+    ensure_policy_user $dir
+  else
+    echo "# ignoring non-directory $dir"
+  fi
+done
+
+
+
