@@ -48,9 +48,16 @@ function ensure_key_present() {
   # read each line,
   # if any line is identical to $2, return
   # if end of loop, emit command to add to the file.
+  keyline=$(< "$1")
   while read line ; do
-    
+    if [ "$line" == "$keyline" ] ; then
+      # We found it!  Nothing to do here
+      return
+    fi
   done < "$2"
+  # $keyline was not found...
+  echo echo \'${keyline}\' '|' tee '>'/dev/null -a \'"$1"\'
+  return 1
 }
 
 ## Ensures that the .ssh/authorized_keys has the keys
