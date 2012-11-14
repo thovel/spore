@@ -4,9 +4,13 @@
 # to be run in order for the local system to comply with a policy
 
 
-## Get the configuration value of a key $1 from a simple config file $2.
+## Get the configuration value of a key $2 from section $1 from a
+## ini-file config file $2.
 function get() {
-  sed -n "/^$2=/s/$2=//p" "$1" | head -n 1
+  sed -n "/\[$2\]/,/^\[/ {
+            /^$3=/s/$3=//p
+          }" "$1" | head -n 1
+  # TODO: accept whitespaces at beginning of line and around e.g. "="
 }
 
 
@@ -114,12 +118,12 @@ function ensure_ssh_keys() {
 }
 
 function ensure_policy_user() {
-  local person="$1/person.txt"
+  local person="$1/person.ini"
   if [ ! -r "$person" ] ; then
     echo "# $person does not have a person definition."
     return;
   fi
-  user_name=$(get "$person" user_name)
+  user_name=$(get "$person" user name)
   if [ -z "$user_name" ] ; then
     echo "# $person does not have a user_name; ignoring."
     return;
@@ -129,7 +133,7 @@ function ensure_policy_user() {
     return
   fi
 
-  user_groups=$(get "$person" user_groups)
+  user_groups=$(get "$person" user groups)
   local group;
   for group in $user_groups ; do
     # ensure group that the user should be added to exists
@@ -147,20 +151,22 @@ function ensure_policy_user() {
   ensure_ssh_keys $1
 }
 
+function ensure_policy() {
+  for dir in "$1/users/"* ; do
+    if [ -d "$dir" ] ; then
+      ensure_policy_user $dir
+    else
+      echo "# ignoring non-directory $dir"
+    fi
+  done
+}
+
 policy=$1
 
 if [[ -z "$1" || ! -d "$1" ]] ; then
   echo "# policy '$1' not specified or exists"
-  exit 2
+  return 2
 fi
 
-for dir in "$1/users/"* ; do
-  if [ -d "$dir" ] ; then
-    ensure_policy_user $dir
-  else
-    echo "# ignoring non-directory $dir"
-  fi
-done
-
-
+ensure_policy
 
