@@ -35,12 +35,12 @@ function ensure_user_owns() {
   fi
 }
 
-### Ensures that keys in a keyfile $2 are present for a user $1.
+### Ensures that keys in a keyfile $1 are present for a user's authorized_keys $2.
 function ensure_key_present() {
-  sshdir=~"$1"/.ssh
-  ensure_make_dir 700 $sshdir || return 1
-  ensure_user_owns $username $sshdir || return 1
-  ensure_permissions 700 $sshdir || return 1
+  # Algorithm:
+  # read each line,
+  # if any line is identical to $2 OK it.
+  # if any line is 
 }
 
 ## Ensures that the .ssh/authorized_keys has the keys
@@ -52,15 +52,19 @@ function ensure_ssh_keys() {
     echo "# ignoring $user_name's keys, since keydir $keydir is missing."
     return
   fi
+  sshdir=~"$user_name"/.ssh
+  ensure_dir_exists 700 $sshdir || return 1
+  ensure_user_owns $user_name $sshdir || return 1
+  ensure_permissions 700 $sshdir || return 1
   local key
   for key in "$keydir/"*.pub ; do
     if [ -r "$key" ] ; then
-      ensure_key_present $user_name $key || return 1
+      ensure_key_present $key $sshdir/authorized_keys || return 1
     fi
   done
   for key in "$keydir/"*.blacklisted ; do
     if [ -r "$key" ] ; then
-      ensure_key_absent $user_name $key || return 1
+      ensure_key_absent $key $sshdir/authorized_keys || return 1
     fi
   done
 }
