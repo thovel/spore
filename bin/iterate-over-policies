@@ -5,11 +5,11 @@ policy=$1
 if [ -z "$policy" ] ; then
   echo "Please specify a directory containing users and so on."
   exit 2
-do
+fi
 if [ ! -d "$policy" ] ; then
   echo "Policy needs to be a directory."
   exit 2
-do
+fi
 
 max_policies=1000
 counter=0
