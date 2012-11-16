@@ -4,16 +4,22 @@
 # to be run in order for the local system to comply with a policy
 
 
-## Get the configuration value of a key $2 from section $1 from a
-## ini-file config file $2.
+## Get the configuration value of a key $3 from section $2 from a
+## ini-file config file $1, printing the default value $4 if it's
+## not set.
 function get() {
   # first look for any section of the file between a [$2] and a [
   # Within that ({}) look for the "$3 =" with any whitespace interspersed.
   # If you find it, remove everything up to the first "=".
   # "I" is for case insensitive.
-  sed -n "/^[[:space:]]*\[$2\]/I,/^\[/ {
+  local result=$(sed -n "/^[[:space:]]*\[$2\]/I,/^\[/ {
             /^[[:space:]]*$3[[:space:]]*=[[:space:]]*/Is/[^=]*=[[:space:]]*//p
-          }" "$1" | head -n 1
+          }" "$1" | head -n 1)
+  if [ -z "$result" ] ; then
+    echo "$4"
+  else
+    echo "$result"
+  fi
 }
 
 
@@ -132,8 +138,9 @@ function ensure_policy_user() {
     return;
   fi
   user_full=$(get "$person" name full)
+  user_shell=$(get "$person" user shell "/bin/bash")
   if ! getent passwd $user_name >/dev/null; then
-    echo "useradd --create-home  --comment '$user_full' '$user_name'"
+    echo "useradd --create-home  --comment '$user_full' --shell '$user_shell' '$user_name'"
     return
   fi
 
