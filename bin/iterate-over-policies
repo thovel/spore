@@ -2,7 +2,16 @@
 
 # Iterates over a policy until it stabilizes
 policy=$1
-max_policies=100
+if [ -z "$policy" ] ; then
+  echo "Please specify a directory containing users and so on."
+  exit 2
+do
+if [ ! -d "$policy" ] ; then
+  echo "Policy needs to be a directory."
+  exit 2
+do
+
+max_policies=1000
 counter=0
 outstanding_policies_bin=$(dirname $0)/outstanding-policies
 oldscript="something"
