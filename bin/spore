@@ -1,7 +1,27 @@
 #!/bin/bash
 
-# The outstanding-policies command will emit commands that are needed
-# to be run in order for the local system to comply with a policy
+function usage() {
+cat <<-EOF
+The spore command is used to seed a system with user accounts, ssh
+public keys, and other things needed in order for a fresh, clean
+machine to be accessible to authorized staff.  Typically spore is
+invoked as part of the initial set-up scripts, but is also run as a
+cron job to ensure that changes to user accounts or public keys are
+propagated to the systems.
+
+Synopsis:
+  spore [options] <command> <directory>
+
+<command>: Spore accepts these commands:
+  next     shows the next steps that are needed
+  apply    ensures that the system conforms to the directory
+
+<directory>: a directory structure as described in
+/usr/share/doc/spore/README
+
+Spore does not have any options.
+EOF
+}
 
 
 ## Get the configuration value of a key $3 from section $2 from a
@@ -173,8 +193,51 @@ function ensure_policy() {
   done
 }
 
-policy=$1
+function iterate_over_spores() {
+  # TODO: configurable number of iterations to allow
+  local max_policies=1000
+  local counter=0
+  local oldscript=""
+  while [[ $counter -lt $max_policies ]]
+  do
+    script="$(ensure_policy "$1")"
+    if [ -z "$script" ] ; then
+      break;
+    fi
+    if [ "${oldscript}" == "${script}" ] ; then
+      break;
+    fi
+    eval "${script}"
+    oldscript="${script}"
+    counter=$((counter + 1))
+  done
+  if [ ! -z "${script}" ] ; then
+    echo "${script}"
+  fi
+  echo "Complete ($counter commands run)."
+}
 
-[[ ! -z "$1" && -d "$1" ]] &&
-  ensure_policy "$1"
+
+function main() {
+  local command=$1
+  local spores=$2
+  if [ "$command" == "" ] ; then
+    usage
+    exit 0
+  fi
+  if [[ -z "$spores" || ! -d "$spores" ]] ; then
+    echo "You must specify an existing directory to work with."
+    exit 2
+  fi
+  if [ "$command" == "next" ] ; then
+    ensure_policy "$spores"
+  elif [ "$command" == "apply" ] ; then
+    iterate_over_spores "$spores"
+  else
+    echo "Unknown command $2"
+  fi
+}
+
+
+main "${@}"
 

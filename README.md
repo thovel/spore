@@ -1,23 +1,40 @@
-This is a tool to ensure that users exist and can log in to a system.
+This is a tool to ensure that users exist and can log in to a system,
+using ssh keys and are in the correct groups, etc.
 
 About the tools
 ===============
 
+The spore command accepts a command and a directory:
 
-outstanding-policies
---------------------
+    spore <command> <directory>
+
+example invocations:
+
+    spore next /my/spores | sudo tee -a /var/log/spore-commands | sudo sh
+    sudo spore apply /my/spores
+
+Spore takes the definitions in the directory (see Declaration, below)
+and
+
+ * creates users and groups defined therein
+ * adds users to groups
+ * rolls out and revokes ssh authorized keys
+
+
+spore next
+----------
 Looks through a declaration and sees if anything needs to be done. If
 anything does need to be done, echos one or more commands to execute
 to bring the system slightly more in compliance.
 
-Running those scripts and then re-running `outstanding-policies` will
+Running those scripts and then re-running `spore next` will
 therefore, bit by bit, get your system into the described state.
 
 
-iterate-over-policies
----------------------
+spore apply
+-----------
 This is a simple tool which
-- runs outstanding-policies over a declaration
+- runs `spore next` over a declaration
 - executes any commands needed to bring the system into compliance
 - repeats until nothing is outstanding
 
@@ -62,45 +79,45 @@ First, an overview of the declaration:
 
 To see if your system is complying with the policy, run
 
-    $ outstanding-policies examples/simple-declaration
+    $ spore next examples/simple-declaration
     useradd --create-home  --comment 'John Doe' 'jdoe'
 
 It suggests that you should run `useradd` to create the user
 
-    $ outstanding-policies examples/simple-declaration | sudo sh
+    $ spore next examples/simple-declaration | sudo sh
 
 It doesn't output anything...  Now see if we comply:
 
-    $ outstanding-policies examples/simple-declaration
+    $ spore next examples/simple-declaration
     mkdir --mode 700 '/home/jdoe/.ssh'
 
 Now, it suggests to create a .ssh directory in the user's home
 directory.  The next thing...
 
-    $ outstanding-policies examples/simple-declaration
+    $ spore next examples/simple-declaration
     chown jdoe: '/home/jdoe/.ssh'
 
 ...is to change the owner of the directory, and then ...
 
-    $ outstanding-policies examples/simple-declaration
+    $ spore next examples/simple-declaration
     echo 'ssh-dss AAAAB3NzaC== john@home' | tee >/dev/null -a
       '/home/jdoe/.ssh/authorized_keys'
 
 ... add an SSH key (the line has been split to make this readme more
 readable).
 
-This continues for another two keys until the `outstanding-policies`
+This continues for another two keys until the `spore next`
 command returns nothing (or just comments), and your system
 "complies" with the declaration you specified.
 
-The `iterate-over-policies` command merely does what you just did,
-namely repeat calling `outstanding-policies` for as long as it takes,
+The `spore apply` command merely does what you just did,
+namely repeat calling `spore next` for as long as it takes,
 faithfully executing each command to bring the system closer and
 closer to being in compliance.
 
 If you delete the jdoe user, and his home directory:
 
-    $ sudo iterate-over-policies examples/simple-declaration
+    $ sudo spore apply examples/simple-declaration
     Complete (8 commands run).
 
 and your system is "compliant"
