@@ -1,8 +1,85 @@
-This is a tool to ensure that users exist and can log in to a system,
-using ssh keys and are in the correct groups, etc.
+This is a set of tools to make it possible to ensure that users exist
+and can log in to a system, using ssh keys and are in the correct
+groups, with varying sets of authorizations in different
+environments.
+
+About Spores
+============
+
+The word Spore is inspired with the reproductive system of Fungus.
+The inspiration is in-part caused by the fact that spores can survive
+in harsh environments, but still be able to spring to life.  This
+software product aims to seed a piece of software, e.g. an operating
+system or http server with authentication information to authorized
+parties.  In essence, using these tools, a system targeted by spore
+will have the user definitions, SSH keys or similar that are
+appropriate for that system, as defined by the administrator.
+
+What is a spore?
+----------------
+
+In this software tool, a spore is one or more collections of user
+definitions:
+
+
+    person.ini:
+
+    [name]
+    full = John Doe
+
+    [user]
+    name = jdoe
+
+That's a "minimal" spore which defines a user `jdoe` for the person
+John Doe.  A spore can contain SSH keys (in the `ssh-keys` directory)
+and other information too.
+
+A spore seldom lives alone, and several person.ini files typically
+live in sibling directories:
+
+    jdoe/person.ini
+    susan/person.ini
+
+
+Dispersing spores
+-----------------
+
+Spores on themselves can be used as-is to create the users on the
+machines in question, but often, certain users are supposed to have
+certaion groups on certain types of machines.  This is where
+dispersing comes in.
+
+A conf-file (yes, an .ini file format) defines how spores are
+dispersed.  This file describes what roles a user has, and what
+permissions are assigned to each role.
+
+    disperse.conf:
+    [users]
+      jdoe = operator
+      susan = user
+
+    [permissions]
+      operator = shell access to production
+      operator = become root on production
+      user = shell access to production
+
+(Note: The syntax is very new, and is in a state of flux; don't count
+on it not changing!  Particular, assigning groups directly might well
+happen.)
+
+After "dispersing" to `production` you will get two spores defining
+the users jdoe and susan, but with additional information about what
+groups the users should get.  Specifically, jdoe, being an `operator`
+gets to be in the `adm` group, which has sudo privileges.
+
 
 About the tools
 ===============
+
+There are two tools.  `spore` and `spore-disperse`.
+
+`spore`
+-------
 
 The spore command accepts a command and a directory:
 
@@ -21,8 +98,8 @@ and
  * rolls out and revokes ssh authorized keys
 
 
-spore next
-----------
+`spore next`
+------------
 Looks through a declaration and sees if anything needs to be done. If
 anything does need to be done, echos one or more commands to execute
 to bring the system slightly more in compliance.
@@ -31,8 +108,8 @@ Running those scripts and then re-running `spore next` will
 therefore, bit by bit, get your system into the described state.
 
 
-spore apply
------------
+`spore apply`
+-------------
 This is a simple tool which
 - runs `spore next` over a declaration
 - executes any commands needed to bring the system into compliance
@@ -40,6 +117,42 @@ This is a simple tool which
 
 Running this command will therefore bring your system into compliance
 with the declaration.
+
+
+`spore-disperse`
+----------------
+
+Spore-disperse rehashes the original spores it receives, based on the
+definitions passed in on the command line.  The result is a new set
+of spores which more closely fits a specific use case.
+
+The point of dispersing is to allow a common and large directory of
+user information, e.g. for a whole company or organization, while
+at the same time providing spore information for different subsets
+of users different access levels in different systems.
+
+The "root" spore would be the maintained user directory, and for each
+substantial subset of systems that users need access to, the
+directory would be dispersed into smaller spores, with different and
+perhaps overlapping subsets of the full user directory.  Users with
+administrative rights in one spore might have little or no rights in
+a different spore.
+
+
+How to use it
+=============
+
+1. Maintain a central, well controlled repository of spores, with
+   user information and public keys
+2. Maintain a few "dispersion" configration files for each of the
+   major systems involved
+3. Run the central spores through the dispersions to create per-
+   system spores
+4. Package and sign these spores and deliver them to the machines
+   in question
+5. Finally run `spore apply` on the delivered spores after the
+   signature has been verified.
+6. Your users will have access to the system.
 
 
 Declaration
