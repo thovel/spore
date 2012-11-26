@@ -15,11 +15,24 @@ Synopsis:
 <command>: Spore accepts these commands:
   next     shows the next steps that are needed
   apply    ensures that the system conforms to the directory
+  auth     performs authorization and authentication
 
 <directory>: a directory structure as described in
 /usr/share/doc/spore/README
 
 Spore does not have any options.
+
+Auth is a bit special and needs a few more arguments:
+
+  spore auth <directory> <auth.ini> <environment> <output-directory>
+
+where auth.ini is a file containing the roles and permissions you
+would like to apply.  The output-directory will be created if it
+doesn't exist, and will be populated with a new spore directory
+containing a new "spore" directory containing a subset of the spores
+provided, with additional information, like additional groups that
+users might have access to in the given <environment>.  TODO: this
+auth command might be forked off into a separate command.
 EOF
 }
 
@@ -42,6 +55,51 @@ function get() {
   fi
 }
 
+## Get the configuration value of a key $3 from section $2 from a
+## ini-file config file $1, printing the default value $4 if it's
+## not set.  Returns all values comma-separated.
+function get_multi() {
+  # first look for any section of the file between a [$2] and a [
+  # Within that ({}) look for the "$3 =" with any whitespace interspersed.
+  # If you find it, remove everything up to the first "=".
+  # "I" is for case insensitive.
+  local result=$(sed -n "/^[[:space:]]*\[$2\]/I,/^\[/ {
+            /^[[:space:]]*$3[[:space:]]*=[[:space:]]*/Is/[^=]*=[[:space:]]*//p
+          }" "$1" | xargs -L 1 echo -n , )
+  if [ -z "$result" ] ; then
+    echo "$4"
+  else
+    echo "${result:2}" # Remove preceding comma and space from first value.
+  fi
+}
+
+
+## List the keys of the section $2 from an ini-file config file $1,
+function keys() {
+  # first look for any section of the file between a [$2] and a [
+  # If you find it, remove everything after the first "="
+  # "I" is for case insensitive.
+  local result=$(sed -n "/^[[:space:]]*\[$2\]/I,/^\[/ {
+            /^[[:space:]]*[a-z0-9/@:\.]*[[:space:]]*=[[:space:]]*/Is/[[:space:]]*=.*//p
+          }" "$1" | sort | uniq)
+  echo "$result"
+}
+
+
+function set_ini_value() {
+  if grep -q "^[[:space:]]*\[$2\]" "$1" ; then
+    sed -i -e "/^[[:space:]]*\[$2\]/I,/^\[/ {
+               /^[[:space:]]*$3[[:space:]]*=[[:space:]]*/Id
+               }" \
+           -e "/^[[:space:]]*\[$2\]/a$3=$4" "$1"
+  else
+    cat >> $1 <<- EOF
+
+	[$2]
+	$3 = $4
+	EOF
+  fi
+}
 
 ## Ensures that the directory $2 exists, and if it isn't
 ## create it with the specified octal mode $1.
@@ -218,21 +276,123 @@ function iterate_over_spores() {
 }
 
 
+# Return a list of roles the user has
+function do_auth_get_roles_of_user() {
+  get $1 users $2
+}
+
+# Return the permissions a role implies for a particular environment
+function do_auth_get_permissions_of_role() {
+  local allperms
+  allperms=$(get_multi $1 permissions $3)
+  IFS=',' read -ra allpermsarr <<< "$allperms"
+  for perm in "${allpermsarr[@]}" ; do
+    if egrep -q ' (in|on|to) '"$2"$ <<< $perm  ; then
+      echo $perm | sed -E -e s/' (in|on|to) '"$2"$// -e s/' '+/_/g
+    fi
+  done
+}
+
+## Called only when the user actually has login permissions.
+## exmaple:
+##   /dir     /foo.ini  production    /tmp/output  some/identi@fier
+##   1        2         3             4            5
+##   <spores> <inifile> <environment> <output-dir> <person-identifier>
+
+function do_auth_process_login_permission() {
+  ## TODO: handle user identifiers with slashes in them.
+  mkdir -p $4/users
+  cp -rp "$1/$5" "$4/users"
+}
+
+function do_auth_process_become_root_permission() {
+  ## TODO: handle user identifiers with slashes in them.
+  [ ! -r $4/users/$5/person.ini ] && return 0
+  groups=$(get "$4/users/$5/person.ini" user groups )
+  if ! grep -q '\badm\b' <<<$groups ; then
+    groups="adm ${groups}"
+    set_ini_value $4/users/$5/person.ini user groups "$groups"
+  fi
+}
+
+function do_auth_process_deploy_permission() {
+  ## TODO: handle user identifiers with slashes in them.
+  [ ! -r $4/users/$5/person.ini ] && return 0
+  groups=$(get "$4/users/$5/person.ini" user groups )
+  if ! grep -q '\bdeploy\b' <<<$groups ; then
+    groups="deploy ${groups}"
+    set_ini_value $4/users/$5/person.ini user groups "$groups"
+  fi
+}
+
+
+## Apply the authorization and authentication for a single user
+## Get all the roles that the user has
+## translate the roles to a list of permissions
+## implement the permissions
+function do_auth_user() {
+  local roles="$(do_auth_get_roles_of_user "$2" "$5")"
+  local role
+  echo "user $5 has roles: '$roles'."
+  local permissions=$(
+  for role in $roles ; do
+    do_auth_get_permissions_of_role "$2" "$3" "$role"
+  done | sort | uniq
+  )
+  echo $permissions
+  grep -q '\blogin\b' <<< $permissions && do_auth_process_login_permission "${@}"
+  grep -q '\bbecome_root\b' <<< $permissions && do_auth_process_become_root_permission "${@}"
+  grep -q '\bdeploy\b' <<< $permissions && do_auth_process_deploy_permission "${@}"
+}
+
+## Apply the authorization and authentication
+##
+## Example: spore auth /etc/spores/ test.ini production /tmp/my-applied/spores
+## Input $1 a directory of spores
+## Input $2 an ini-file containing
+## Input $3 an environment (e.g. test, production, staging)
+## Output $4 an output directory for spores which will be created/amended.
+##
+## Ini file format
+## [permissions]
+## role1 = permission
+## role2 = permission
+## [users]
+## vizrt/erm = role1, role2
+##
+## permission is one of:
+##  - login to <environment>
+function do_auth() {
+  local inifile="$2"
+  if [ ! -r "$inifile" ] ; then
+    echo "Please specify a readable ini file."
+    return 1;
+  fi
+  
+  local user
+  for user in $(keys "$inifile" users) ; do
+    do_auth_user "${@}" $user
+  done
+}
+
+
 function main() {
   local command=$1
   local spores=$2
   if [ "$command" == "" ] ; then
     usage
-    exit 0
+    return 0
   fi
   if [[ -z "$spores" || ! -d "$spores" ]] ; then
     echo "You must specify an existing directory to work with."
-    exit 2
+    return 2
   fi
   if [ "$command" == "next" ] ; then
     ensure_policy "$spores"
   elif [ "$command" == "apply" ] ; then
     iterate_over_spores "$spores"
+  elif [ "$command" == "auth" ] ; then
+    do_auth "${@:2}"
   else
     echo "Unknown command $2"
   fi
