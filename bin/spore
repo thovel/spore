@@ -45,8 +45,8 @@ function get() {
   # Within that ({}) look for the "$3 =" with any whitespace interspersed.
   # If you find it, remove everything up to the first "=".
   # "I" is for case insensitive.
-  local result=$(sed -n "/^[[:space:]]*\[$2\]/I,/^\[/ {
-            /^[[:space:]]*$3[[:space:]]*=[[:space:]]*/Is/[^=]*=[[:space:]]*//p
+  local result=$(sed -n "/^[[:space:]]*\[${2}\]/I,/^\[/ {
+            /^[[:space:]]*${3/\//\/}[[:space:]]*=[[:space:]]*/Is/[^=]*=[[:space:]]*//p
           }" "$1" | head -n 1)
   if [ -z "$result" ] ; then
     echo "$4"
@@ -64,7 +64,7 @@ function get_multi() {
   # If you find it, remove everything up to the first "=".
   # "I" is for case insensitive.
   local result=$(sed -n "/^[[:space:]]*\[$2\]/I,/^\[/ {
-            /^[[:space:]]*$3[[:space:]]*=[[:space:]]*/Is/[^=]*=[[:space:]]*//p
+            /^[[:space:]]*${3/\//\/}[[:space:]]*=[[:space:]]*/Is/[^=]*=[[:space:]]*//p
           }" "$1" | xargs -L 1 echo -n , )
   if [ -z "$result" ] ; then
     echo "$4"
@@ -300,28 +300,29 @@ function do_auth_get_permissions_of_role() {
 ##   <spores> <inifile> <environment> <output-dir> <person-identifier>
 
 function do_auth_process_login_permission() {
-  ## TODO: handle user identifiers with slashes in them.
-  mkdir -p $4/users
-  cp -rp "$1/$5" "$4/users"
+  [ ! -d $1/$5 ] && return 1
+  targetname=${5/\//-}
+  mkdir -p "$4/users/$targetname"
+  cp -rp "$1/$5/"* "$4/users/$targetname/"
 }
 
 function do_auth_process_become_root_permission() {
-  ## TODO: handle user identifiers with slashes in them.
-  [ ! -r $4/users/$5/person.ini ] && return 0
-  groups=$(get "$4/users/$5/person.ini" user groups )
+  targetname=${5/\//-}
+  [ ! -r $4/users/$targetname/person.ini ] && return 0
+  groups=$(get "$4/users/$targetname/person.ini" user groups )
   if ! grep -q '\badm\b' <<<$groups ; then
     groups="adm ${groups}"
-    set_ini_value $4/users/$5/person.ini user groups "$groups"
+    set_ini_value $4/users/$targetname/person.ini user groups "$groups"
   fi
 }
 
 function do_auth_process_deploy_permission() {
-  ## TODO: handle user identifiers with slashes in them.
-  [ ! -r $4/users/$5/person.ini ] && return 0
-  groups=$(get "$4/users/$5/person.ini" user groups )
+  targetname=${5/\//-}
+  [ ! -r $4/users/$targetname/person.ini ] && return 0
+  groups=$(get "$4/users/$targetname/person.ini" user groups )
   if ! grep -q '\bdeploy\b' <<<$groups ; then
     groups="deploy ${groups}"
-    set_ini_value $4/users/$5/person.ini user groups "$groups"
+    set_ini_value $4/users/$targetname/person.ini user groups "$groups"
   fi
 }
 
@@ -340,9 +341,9 @@ function do_auth_user() {
   done | sort | uniq
   )
   echo $permissions
-  grep -q '\blogin\b' <<< $permissions && do_auth_process_login_permission "${@}"
-  grep -q '\bbecome_root\b' <<< $permissions && do_auth_process_become_root_permission "${@}"
-  grep -q '\bdeploy\b' <<< $permissions && do_auth_process_deploy_permission "${@}"
+  grep -q '\blogin\b' <<< $permissions && do_auth_process_login_permission "${@}" || return 1
+  grep -q '\bbecome_root\b' <<< $permissions && do_auth_process_become_root_permission "${@}" || return 1
+  grep -q '\bdeploy\b' <<< $permissions && do_auth_process_deploy_permission "${@}" || return 1
 }
 
 ## Apply the authorization and authentication
