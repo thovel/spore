@@ -1,0 +1,404 @@
+#!/bin/bash
+
+function usage() {
+cat <<-EOF
+The spore command is used to seed a system with user accounts, ssh
+public keys, and other things needed in order for a fresh, clean
+machine to be accessible to authorized staff.  Typically spore is
+invoked as part of the initial set-up scripts, but is also run as a
+cron job to ensure that changes to user accounts or public keys are
+propagated to the systems.
+
+Synopsis:
+  spore [options] <command> <directory>
+
+<command>: Spore accepts these commands:
+  next     shows the next steps that are needed
+  apply    ensures that the system conforms to the directory
+  auth     performs authorization and authentication
+
+<directory>: a directory structure as described in
+/usr/share/doc/spore/README
+
+Spore does not have any options.
+
+Auth is a bit special and needs a few more arguments:
+
+  spore auth <directory> <auth.ini> <environment> <output-directory>
+
+where auth.ini is a file containing the roles and permissions you
+would like to apply.  The output-directory will be created if it
+doesn't exist, and will be populated with a new spore directory
+containing a new "spore" directory containing a subset of the spores
+provided, with additional information, like additional groups that
+users might have access to in the given <environment>.  TODO: this
+auth command might be forked off into a separate command.
+EOF
+}
+
+
+## Get the configuration value of a key $3 from section $2 from a
+## ini-file config file $1, printing the default value $4 if it's
+## not set.
+function get() {
+  # first look for any section of the file between a [$2] and a [
+  # Within that ({}) look for the "$3 =" with any whitespace interspersed.
+  # If you find it, remove everything up to the first "=".
+  # "I" is for case insensitive.
+  local result=$(sed -n "/^[[:space:]]*\[${2}\]/I,/^\[/ {
+            /^[[:space:]]*${3/\//\/}[[:space:]]*=[[:space:]]*/Is/[^=]*=[[:space:]]*//p
+          }" "$1" | head -n 1)
+  if [ -z "$result" ] ; then
+    echo "$4"
+  else
+    echo "$result"
+  fi
+}
+
+## Get the configuration value of a key $3 from section $2 from a
+## ini-file config file $1, printing the default value $4 if it's
+## not set.  Returns all values comma-separated.
+function get_multi() {
+  # first look for any section of the file between a [$2] and a [
+  # Within that ({}) look for the "$3 =" with any whitespace interspersed.
+  # If you find it, remove everything up to the first "=".
+  # "I" is for case insensitive.
+  local result=$(sed -n "/^[[:space:]]*\[$2\]/I,/^\[/ {
+            /^[[:space:]]*${3/\//\/}[[:space:]]*=[[:space:]]*/Is/[^=]*=[[:space:]]*//p
+          }" "$1" | xargs -L 1 echo -n , )
+  if [ -z "$result" ] ; then
+    echo "$4"
+  else
+    echo "${result:2}" # Remove preceding comma and space from first value.
+  fi
+}
+
+
+## List the keys of the section $2 from an ini-file config file $1,
+function keys() {
+  # first look for any section of the file between a [$2] and a [
+  # If you find it, remove everything after the first "="
+  # "I" is for case insensitive.
+  local result=$(sed -n "/^[[:space:]]*\[$2\]/I,/^\[/ {
+            /^[[:space:]]*[a-z0-9/@:\.]*[[:space:]]*=[[:space:]]*/Is/[[:space:]]*=.*//p
+          }" "$1" | sort | uniq)
+  echo "$result"
+}
+
+
+function set_ini_value() {
+  if grep -q "^[[:space:]]*\[$2\]" "$1" ; then
+    sed -i -e "/^[[:space:]]*\[$2\]/I,/^\[/ {
+               /^[[:space:]]*$3[[:space:]]*=[[:space:]]*/Id
+               }" \
+           -e "/^[[:space:]]*\[$2\]/a$3=$4" "$1"
+  else
+    cat >> $1 <<- EOF
+
+	[$2]
+	$3 = $4
+	EOF
+  fi
+}
+
+## Ensures that the directory $2 exists, and if it isn't
+## create it with the specified octal mode $1.
+function ensure_dir_exists() {
+  if [ ! -d $sshdir ] ; then
+    echo "mkdir --mode $1 '$2'"
+    return 1
+  fi
+}
+
+
+## Ensures that the permissions $1 are set for a file $2
+function ensure_permissions() {
+  local perms="$(stat -c %a "$2")"
+  if [ "$perms" != "$1" ] ; then
+    echo "chmod $1 '$2'"
+    return 1
+  fi
+}
+
+
+## Ensures that a user $1 owns a file $2
+function ensure_user_owns() {
+  local owner="$(stat -c %U "$2")"
+  if [ "$owner" != "$1" ] ; then
+    echo "chown $1: '$2'"
+    return 1
+  fi
+}
+
+
+## Ensures that keys in a keyfile $1 are present for a user's
+## authorized_keys file $2.
+## If the keyfile contains more than one key, abort
+function ensure_key_present() {
+  # Algorithm:
+  # read each line,
+  # if any line is identical to $2, return
+  # if end of loop, emit command to add to the file.
+  local keyline=$(< "$1")
+  if [ -r $2 ] ; then
+    while read line ; do
+      if [ "$line" == "$keyline" ] ; then
+        # We found it!  Nothing to do here
+        return
+      fi
+    done < "$2"
+  fi
+  # $keyline was not found...
+  # TODO: remove apostrophes in output? ugh...
+  echo echo \'${keyline}\' '|' tee '>'/dev/null -a \'"$2"\'
+  return 1
+}
+
+## Ensures that the key in a keyfile $1 are absent (and removed if
+## they're found) for a user's authorized_keys file $2.
+## If the keyfile contains more than one key, abort
+function ensure_key_absent() {
+  local key="$(sed < "$1" -n 's/.*\b\(ssh-dss\|ssh-rsa\) \([^ ]*\).*/\2/p')"
+  if [ -z "$key" ] ; then
+    echo "# unable to parse key file $1 for blacklisting."
+    return
+  fi
+  if [ -r "$2" ] ; then
+    if grep > /dev/null $key "$2" ; then
+      echo 'sed -i '\''\,'"$key"',d'\' \'$2\'
+      return 1
+    fi
+  fi
+}
+
+## Ensures that the .ssh/authorized_keys has the keys
+## listed in the ssh-keys directories, but none of the
+## keys that have been revoked.
+function ensure_ssh_keys() {
+  local keydir="$1/ssh-keys"
+  if [ ! -d "$keydir" ] ; then
+    echo "# ignoring $user_name's keys, since keydir $keydir is missing."
+    return 0
+  fi
+  sshdir=$(eval echo ~"$user_name"/.ssh)
+  ensure_dir_exists 700 $sshdir || return 1
+  ensure_user_owns $user_name $sshdir || return 1
+  ensure_permissions 700 $sshdir || return 1
+  local key
+  for key in "$keydir/"*.pub ; do
+    if [ -r "$key" ] ; then
+      ensure_key_present $key $sshdir/authorized_keys || return 1
+    fi
+  done
+  for key in "$keydir/"*.blacklisted ; do
+    if [ -r "$key" ] ; then
+      ensure_key_absent $key $sshdir/authorized_keys || return 1
+    fi
+  done
+  if [ -r $sshdir/authorized_keys ] ; then
+    ensure_user_owns $user_name $sshdir/authorized_keys || return 1
+    ensure_permissions 600 $sshdir/authorized_keys || return 1
+  fi
+  # TODO: ensure that no other keys are present (by counting them?)
+  # e.g.
+  # wc -l authorized_keys; ls -1 keydir/*.pub | wc -l
+}
+
+function ensure_policy_user() {
+  local person="$1/person.ini"
+  if [ ! -r "$person" ] ; then
+    echo "# $person does not have a person definition."
+    return;
+  fi
+  user_name=$(get "$person" user name)
+  if [ -z "$user_name" ] ; then
+    echo "# $person does not have a user_name; ignoring."
+    return;
+  fi
+  user_full=$(get "$person" name full)
+  user_shell=$(get "$person" user shell "/bin/bash")
+  if ! getent passwd $user_name >/dev/null; then
+    echo "useradd --create-home  --comment '$user_full' --shell '$user_shell' '$user_name'"
+    return
+  fi
+
+  user_groups=$(get "$person" user groups)
+  local group;
+  for group in $user_groups ; do
+    # ensure group that the user should be added to exists
+    if ! getent group $group >/dev/null; then
+      echo "addgroup $user_name"
+      return
+    fi
+    # Add the user to the group
+    if ! group $user_name | grep > /dev/null '\b'"$group"'\b' ; then
+      echo "addgroup $user_name $group"
+      return
+    fi
+  done
+
+  ensure_ssh_keys $1
+}
+
+function ensure_policy() {
+  local dir
+  for dir in "$1/users/"* ; do
+    if [ -d "$dir" ] ; then
+      ensure_policy_user "$dir"
+    else
+      echo "# ignoring non-directory $dir"
+    fi
+  done
+}
+
+function iterate_over_spores() {
+  # TODO: configurable number of iterations to allow
+  local max_policies=1000
+  local counter=0
+  local oldscript=""
+  while [[ $counter -lt $max_policies ]]
+  do
+    script="$(ensure_policy "$1")"
+    if [ -z "$script" ] ; then
+      break;
+    fi
+    if [ "${oldscript}" == "${script}" ] ; then
+      break;
+    fi
+    eval "${script}"
+    oldscript="${script}"
+    counter=$((counter + 1))
+  done
+  if [ ! -z "${script}" ] ; then
+    echo "${script}"
+  fi
+  echo "Complete ($counter commands run)."
+}
+
+
+# Return a list of roles the user has
+function do_auth_get_roles_of_user() {
+  get $1 users $2
+}
+
+# Return the permissions a role implies for a particular environment
+function do_auth_get_permissions_of_role() {
+  local allperms
+  allperms=$(get_multi $1 permissions $3)
+  IFS=',' read -ra allpermsarr <<< "$allperms"
+  for perm in "${allpermsarr[@]}" ; do
+    if egrep -q ' (in|on|to) '"$2"$ <<< $perm  ; then
+      echo $perm | sed -E -e s/' (in|on|to) '"$2"$// -e s/' '+/_/g
+    fi
+  done
+}
+
+## Called only when the user actually has login permissions.
+## exmaple:
+##   /dir     /foo.ini  production    /tmp/output  some/identi@fier
+##   1        2         3             4            5
+##   <spores> <inifile> <environment> <output-dir> <person-identifier>
+
+function do_auth_process_login_permission() {
+  [ ! -d $1/$5 ] && return 1
+  targetname=${5/\//-}
+  mkdir -p "$4/users/$targetname"
+  cp -rp "$1/$5/"* "$4/users/$targetname/"
+}
+
+function do_auth_process_become_root_permission() {
+  targetname=${5/\//-}
+  [ ! -r $4/users/$targetname/person.ini ] && return 0
+  groups=$(get "$4/users/$targetname/person.ini" user groups )
+  if ! grep -q '\badm\b' <<<$groups ; then
+    groups="adm ${groups}"
+    set_ini_value $4/users/$targetname/person.ini user groups "$groups"
+  fi
+}
+
+function do_auth_process_deploy_permission() {
+  targetname=${5/\//-}
+  [ ! -r $4/users/$targetname/person.ini ] && return 0
+  groups=$(get "$4/users/$targetname/person.ini" user groups )
+  if ! grep -q '\bdeploy\b' <<<$groups ; then
+    groups="deploy ${groups}"
+    set_ini_value $4/users/$targetname/person.ini user groups "$groups"
+  fi
+}
+
+
+## Apply the authorization and authentication for a single user
+## Get all the roles that the user has
+## translate the roles to a list of permissions
+## implement the permissions
+function do_auth_user() {
+  local roles="$(do_auth_get_roles_of_user "$2" "$5")"
+  local role
+  echo "user $5 has roles: '$roles'."
+  local permissions=$(
+  for role in $roles ; do
+    do_auth_get_permissions_of_role "$2" "$3" "$role"
+  done | sort | uniq
+  )
+  echo $permissions
+  grep -q '\blogin\b' <<< $permissions && do_auth_process_login_permission "${@}" || return 1
+  grep -q '\bbecome_root\b' <<< $permissions && do_auth_process_become_root_permission "${@}" || return 1
+  grep -q '\bdeploy\b' <<< $permissions && do_auth_process_deploy_permission "${@}" || return 1
+}
+
+## Apply the authorization and authentication
+##
+## Example: spore auth /etc/spores/ test.ini production /tmp/my-applied/spores
+## Input $1 a directory of spores
+## Input $2 an ini-file containing
+## Input $3 an environment (e.g. test, production, staging)
+## Output $4 an output directory for spores which will be created/amended.
+##
+## Ini file format
+## [permissions]
+## role1 = permission
+## role2 = permission
+## [users]
+## vizrt/erm = role1, role2
+##
+## permission is one of:
+##  - login to <environment>
+function do_auth() {
+  local inifile="$2"
+  if [ ! -r "$inifile" ] ; then
+    echo "Please specify a readable ini file."
+    return 1;
+  fi
+  
+  local user
+  for user in $(keys "$inifile" users) ; do
+    do_auth_user "${@}" $user
+  done
+}
+
+
+function main() {
+  local command=$1
+  local spores=$2
+  if [ "$command" == "" ] ; then
+    usage
+    return 0
+  fi
+  if [[ -z "$spores" || ! -d "$spores" ]] ; then
+    echo "You must specify an existing directory to work with."
+    return 2
+  fi
+  if [ "$command" == "next" ] ; then
+    ensure_policy "$spores"
+  elif [ "$command" == "apply" ] ; then
+    iterate_over_spores "$spores"
+  elif [ "$command" == "auth" ] ; then
+    do_auth "${@:2}"
+  else
+    echo "Unknown command $2"
+  fi
+}
+
+
+main "${@}"
+
