@@ -40,6 +40,13 @@ live in sibling directories:
     jdoe/person.ini
     susan/person.ini
 
+Collections of spores like this are referred to as a "directory of
+spores," or just plural "spores," or just a "directory."
+
+A spore may be applied to a system, which results in user accounts
+being created, and SSH keys being added. However, it is also possible
+to /disperse/ spores for more fine grained authorization.
+
 
 Dispersing spores
 -----------------
@@ -66,6 +73,9 @@ permissions are assigned to each role.
 (Note: The syntax is very new, and is in a state of flux; don't count
 on it not changing!  Particular, assigning groups directly might well
 happen.)
+
+In `[users]` the keys represent directory paths, so e.g. `jdoe`
+refers to `/users/jdoe/person.ini`.
 
 After "dispersing" to `production` you will get two spores defining
 the users jdoe and susan, but with additional information about what
