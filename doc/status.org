@@ -1,0 +1,4 @@
+* Status of Spore
+goals.
+To be able to deploy permissions and identities to systems from a directory structure of files.
+
