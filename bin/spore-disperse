@@ -143,16 +143,14 @@ function do_auth_process_deploy_permission() {
 function do_auth_user() {
   local roles="$(do_auth_get_roles_of_user "$2" "$5")"
   local role
-  echo "user $5 has roles: '$roles'."
   local permissions=$(
   for role in $roles ; do
     do_auth_get_permissions_of_role "$2" "$3" "$role"
   done | sort | uniq
   )
-  echo $permissions
-  grep -q '\bshell_access\b' <<< $permissions && do_auth_process_shell_access_permission "${@}" || return 1
-  grep -q '\bbecome_root\b' <<< $permissions && do_auth_process_become_root_permission "${@}" || return 1
-  grep -q '\bdeploy\b' <<< $permissions && do_auth_process_deploy_permission "${@}" || return 1
+  for word in shell_access become_root deploy ; do 
+    grep -q '\b'$word'\b' <<< $permissions && do_auth_process_${word}_permission "${@}" || return 1
+  done
 }
 
 ## Apply the authorization and authentication
