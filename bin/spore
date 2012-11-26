@@ -218,7 +218,7 @@ function ensure_policy_user() {
       return
     fi
     # Add the user to the group
-    if ! group $user_name | grep > /dev/null '\b'"$group"'\b' ; then
+    if ! groups $user_name | grep > /dev/null '\b'"$group"'\b' ; then
       echo "addgroup $user_name $group"
       return
     fi
