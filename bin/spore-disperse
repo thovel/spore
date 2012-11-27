@@ -86,7 +86,7 @@ function set_ini_value() {
 
 # Return a list of roles the user has
 function do_auth_get_roles_of_user() {
-  get $1 users $2
+  get_multi $1 users $2 | sed s/,/' '/g
 }
 
 # Return the permissions a role implies for a particular environment
@@ -102,35 +102,25 @@ function do_auth_get_permissions_of_role() {
   done
 }
 
-## Called only when the user actually has shell access permissions.
+## Called only when the user actually has ssh permissions.
 ## exmaple:
 ##   /dir     /foo.ini  production    /tmp/output  some/identi@fier
 ##   1        2         3             4            5
 ##   <spores> <inifile> <environment> <output-dir> <person-identifier>
 
-function do_auth_process_shell_access_permission() {
+function do_auth_process_ssh_permission() {
   [ ! -d $1/$5 ] && return 1
   targetname=${5/\//-}
   mkdir -p "$4/users/$targetname"
   cp -rp "$1/$5/"* "$4/users/$targetname/"
 }
 
-function do_auth_process_become_root_permission() {
+function do_auth_process_group_permission() {
   targetname=${5/\//-}
   [ ! -r $4/users/$targetname/person.ini ] && return 0
   groups=$(get "$4/users/$targetname/person.ini" user groups )
-  if ! grep -q '\badm\b' <<<$groups ; then
-    groups="adm ${groups}"
-    set_ini_value $4/users/$targetname/person.ini user groups "$groups"
-  fi
-}
-
-function do_auth_process_deploy_permission() {
-  targetname=${5/\//-}
-  [ ! -r $4/users/$targetname/person.ini ] && return 0
-  groups=$(get "$4/users/$targetname/person.ini" user groups )
-  if ! grep -q '\bdeploy\b' <<<$groups ; then
-    groups="deploy ${groups}"
+  if ! grep -q '\b'$6'\b' <<<$groups ; then
+    groups="$6 ${groups}"
     set_ini_value $4/users/$targetname/person.ini user groups "$groups"
   fi
 }
@@ -148,8 +138,20 @@ function do_auth_user() {
     do_auth_get_permissions_of_role "$2" "$3" "$role"
   done | sort | uniq
   )
-  for word in shell_access become_root deploy ; do 
-    grep -q '\b'$word'\b' <<< $permissions && do_auth_process_${word}_permission "${@}" || return 1
+  for word in ssh group_ ; do
+    if grep -q '\b'$word'\b' <<< $permissions ; then
+      do_auth_process_${word}_permission "${@}" || return 1
+    elif grep -q '\b'$word <<< $permissions ; then
+      # extract words after relevant $word from permissions, and use that.
+      local permission
+      for permission in $permissions ; do
+        if [[ $permission == ${word}* ]] ; then
+          # we found it, remove preceding ${word}
+          permission=${permission/${word}/}
+          do_auth_process_${word}permission "${@}" $permission || return 1
+        fi
+      done
+    fi
   done
 }
 
@@ -169,7 +171,7 @@ function do_auth_user() {
 ## vizrt/erm = role1, role2
 ##
 ## permission is one of:
-##  - shell access to <environment>
+##  - ssh to <environment>
 function do_auth() {
   local inifile="$2"
   if [ ! -r "$inifile" ] ; then
