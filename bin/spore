@@ -118,6 +118,21 @@ function ensure_user_owns() {
 }
 
 
+## Ensures that a file is present with specific contents
+## $1 "where it should be"
+## $2 "what it should be"
+## $3 "Initial owner, if spore creates it"
+## $4 "Initial permissions if spore creates it"
+function ensure_file_seeded() {
+  if [ ! -f "$1" ] ; then
+    echo "cp '$2' '$1'"
+    [ ! -z "$3" ] && echo "chown '$3:' '$1'"
+    [ ! -z "$4" ] && echo "chmod '$4' '$1'"
+    return 1
+  fi
+}
+
+
 ## Ensures that keys in a keyfile $1 are present for a user's
 ## authorized_keys file $2.
 ## If the keyfile contains more than one key, abort
@@ -191,6 +206,24 @@ function ensure_ssh_keys() {
   # wc -l authorized_keys; ls -1 keydir/*.pub | wc -l
 }
 
+## Ensures that the dotfiles in each user's "dotfiles" directory are
+## propagated as ".xxx" files owned by the user.  No files can be
+## revoked
+function ensure_dot_files() {
+  local dotfilesdir="$1/dotfiles"
+  if [ ! -d "$dotfilesdir" ] ; then
+    return 0
+  fi
+  local dotfile
+  local homedir=$(eval echo ~"$user_name")
+  for dotfile in "$dotfilesdir/"* ; do
+    if [ -r "$dotfile" ] && [ -f "$dotfile" ] ; then
+      dotfilename=$(basename "$dotfile");
+      ensure_file_seeded $homedir/.${dotfilename} $dotfile ${user_name} 600 || return 1
+    fi
+  done
+}
+
 function ensure_policy_user() {
   local person="$1/person.ini"
   if [ ! -r "$person" ] ; then
@@ -225,6 +258,7 @@ function ensure_policy_user() {
   done
 
   ensure_ssh_keys $1
+  ensure_dot_files $1
 }
 
 function ensure_policy() {

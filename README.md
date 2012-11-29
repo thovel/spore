@@ -195,6 +195,8 @@ First, an overview of the declaration:
 
     $ find simple-declaration -type f
     simple-declaration/users/johndoe@example.com/person.ini
+    simple-declaration/users/johndoe@example.com/dotfiles/hgrc
+    simple-declaration/users/johndoe@example.com/dotfiles/gitconfig
     simple-declaration/users/johndoe@example.com/ssh-keys/home.pub
     simple-declaration/users/johndoe@example.com/ssh-keys/laptop-stolen-in-2011.blacklisted
     simple-declaration/users/johndoe@example.com/ssh-keys/work.pub
@@ -213,14 +215,20 @@ It doesn't output anything...  Now see if we comply:
 
     $ spore next examples/simple-declaration
     mkdir --mode 700 '/home/jdoe/.ssh'
+    cp 'examples/simple-declaration/users/johndoe@example.com/dotfiles/hgrc' '/home/jdoe/.hgrc'
+    chown 'jdoe:' '/home/jdoe/.hgrc'
+    chmod '600' '/home/jdoe/.hgrc'
 
 Now, it suggests to create a .ssh directory in the user's home
-directory.  The next thing...
+directory and place a .hgrc file there.
 
     $ spore next examples/simple-declaration
     chown jdoe: '/home/jdoe/.ssh'
+    cp 'examples/simple-declaration/users/johndoe@example.com/dotfiles/gitconfig' '/home/jdoe/.gitconfig'
+    chown 'jdoe:' '/home/jdoe/.gitconfig'
+    chmod '600' '/home/jdoe/.gitconfig'
 
-...is to change the owner of the directory, and then ...
+Next it changes the owner of the directory, and adds another dotfile.
 
     $ spore next examples/simple-declaration
     echo 'ssh-dss AAAAB3NzaC== john@home' | tee >/dev/null -a
