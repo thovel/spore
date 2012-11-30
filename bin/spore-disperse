@@ -77,7 +77,7 @@ function set_ini_value() {
                }" \
            -e "/^[[:space:]]*\[$2\]/a$3=$4" "$1"
   else
-    cp "$1" "$1$sfx"
+    cp -p "$1" "$1$sfx"
     cat >> $1 <<- EOF
 
 	[$2]
