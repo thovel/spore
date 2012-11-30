@@ -69,18 +69,23 @@ function keys() {
 
 
 function set_ini_value() {
+  local sfx=.$$.bak
   if grep -q "^[[:space:]]*\[$2\]" "$1" ; then
-    sed -i -e "/^[[:space:]]*\[$2\]/I,/^\[/ {
+    sed -i$sfx \
+           -e "/^[[:space:]]*\[$2\]/I,/^\[/ {
                /^[[:space:]]*$3[[:space:]]*=[[:space:]]*/Id
                }" \
            -e "/^[[:space:]]*\[$2\]/a$3=$4" "$1"
   else
+    cp "$1" "$1$sfx"
     cat >> $1 <<- EOF
 
 	[$2]
 	$3 = $4
 	EOF
   fi
+  touch --reference "$1$sfx" "$1"
+  rm -f "$1$sfx"
 }
 
 
