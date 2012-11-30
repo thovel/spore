@@ -247,7 +247,7 @@ function ensure_policy_user() {
   for group in $user_groups ; do
     # ensure group that the user should be added to exists
     if ! getent group $group >/dev/null; then
-      echo "addgroup $user_name"
+      echo "addgroup $group"
       return
     fi
     # Add the user to the group
