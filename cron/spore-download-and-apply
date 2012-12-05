@@ -1,0 +1,96 @@
+#!/bin/bash
+
+if [ ! -r /etc/spore-cronjob.conf ] ; then
+  cat <<- 'EOF'
+	I need an /etc/spore-cronjob.conf to run. For example
+
+	  spore_uri=http://some/ur/of/a/spore
+	  spore_signature_uri=http://some/ur/of/a/spore.asc
+	  http_user=someuser
+	  http_passwd=somepasswd
+	  # GPG ID of the trusted signatures
+	  spore_signee=123456
+
+	The file will be sourced.
+	EOF
+  exit
+fi
+
+. /etc/spore-cronjob.conf
+
+curl_opts="$curl_opts -s"
+
+if [ -z "$spore_uri" ] ; then
+  echo "spore_uri mandatory, not set."
+  exit 2
+fi
+
+if [ ! -z "$spore_signee" ] ; then
+  gpg_opts="$gpg_opts --trusted-key $spore_signee"
+fi
+
+if [ ! -z "$http_user" ] && [ ! -z "$http_passwd" ] ; then
+  curl_opts="$curl_opts --user $http_user:$http_passwd"
+elif [ ! -z "$http_user" ] ; then
+  curl_opts="$curl_opts --user $http_user"
+fi
+
+if [ -z "$spore_signature_uri" ] ; then
+  spore_signature_uri="$spore_uri.asc"
+fi
+
+# Conditionally download $1 to $2 using $3 as metadata.
+function conditional_get() {
+  if [ -r "$3" ] ; then
+    local metadata=$(cat "$3")
+  fi
+  shopt -s nocasematch
+  shopt -s nocaseglob
+  if [[ $metadata == etag:* ]] ; then
+    local conditional=( "--header" "If-None-Match: $(echo ${metadata} | sed s/^etag://i )" )
+  elif [[ $metadata == last-modified* ]] ; then
+    local conditional=( "--header" "If-Modified-Since: $(echo "${metadata}" | sed s/^last-modified://i)" )
+  fi
+  local tmpfile=$(mktemp)
+  local tmpmeta=$(mktemp)
+  curl "${conditional[@]}" $curl_opts $1 --dump-header $tmpmeta > $tmpfile
+  sed -i s/'\r'// $tmpmeta
+
+  read httpver responsestatus responsetext <<< $(grep ^HTTP/ $tmpmeta | tail -n 1)
+  if [ $responsestatus != "200" ] ; then
+    rm $tmpfile $tmpmeta
+    return 1
+  fi
+
+  if [ ! -s $tmpfile ] ; then
+    echo "unable to download $1; empty"
+    rm $tmpfile $tmpmeta
+    return 1
+  fi
+
+  mv "${tmpfile}" "${2}"
+
+  local meta=$( grep -i "^ETag:" "$tmpmeta" | head -n 1 )
+  if [ -z "$meta" ] ; then
+    meta=$( grep -i "^last-modified:" "$tmpmeta" | head -n 1 )
+  fi
+  if [ ! -z "$meta" ] ; then
+    echo "$meta" > $3
+  fi
+  rm $tmpmeta
+  
+}
+
+if conditional_get $spore_uri /var/lib/spore.tar.gz /var/lib/spore.metadata ; then
+  conditional_get $spore_signature_uri /var/lib/spore.tar.gz.asc /var/lib/spore.asc.metadata
+
+  gpg $gpg_opts --verify /var/lib/spore.tar.gz.asc
+
+  if [ $PIPESTATUS != 0 ] ; then
+    echo "Ignoring tampered $spore_signature_uri"
+  fi
+
+  tmpdir=$(mktemp -d)
+  cd $tmpdir && tar xzf /var/lib/spore.tar.gz && spore apply . && cd && rm -rf $tmpdir
+fi
+
