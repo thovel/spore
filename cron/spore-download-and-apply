@@ -4,16 +4,22 @@ if [ ! -r /etc/spore-cronjob.conf ] ; then
   cat <<- 'EOF'
 	I need an /etc/spore-cronjob.conf to run. For example
 
-	  spore_uri=http://some/ur/of/a/spore
-	  spore_signature_uri=http://some/ur/of/a/spore.asc
+	  # The URI of a .tar.gz file containing spores
+	  spore_uri=http://some/ur/of/a/spore.tar.gz
+
+          # The URI of the signature, defaults to "$spore_uri.asc"
+	  # spore_signature_uri=http://some/ur/of/a/spore.asc
+
+	  # If the spore or signature are protected by password, specify them here
 	  http_user=someuser
 	  http_passwd=somepasswd
-	  # GPG ID of the trusted signatures
+
+	  # GPG ID of the trusted signatures;
 	  spore_signee=123456
 
 	The file will be sourced.
 	EOF
-  exit
+  exit 2
 fi
 
 . /etc/spore-cronjob.conf
