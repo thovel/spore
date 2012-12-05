@@ -25,6 +25,7 @@ fi
 function usage() {
 cat <<EOF
 	Usage: $0: [-a] [-d] [-v]
+	  -c : Check consistency of current state.
 	  -d : download spores.
 	  -v : verify signature of downloaded spores
 	  -a : apply spores
@@ -36,6 +37,7 @@ EOF
 
 source /etc/spore-cronjob.conf
 
+check_consistency_of_spores=0
 apply_spores=0
 download_spores=0
 verify_spores=0
@@ -54,6 +56,12 @@ while [ $# -gt 0 ] ; do
     shift;
     continue;
   fi
+  if [ "$1" == "-c" ] ; then
+    check_consistency_of_spores=1
+    default_operation=0
+    shift;
+    continue;
+  fi
   if [ "$1" == "-v" ] ; then
     verify_spores=1
     default_operation=0
@@ -66,6 +74,7 @@ while [ $# -gt 0 ] ; do
 done
 
 if [ $default_operation -eq 1 ] ; then
+  check_consistency_of_spores=1
   apply_spores=1
   download_spores=1
   verify_spores=1
@@ -106,7 +115,7 @@ function conditional_get() {
   sed -i s/'\r'// $tmpmeta
 
   read httpver responsestatus responsetext <<< $(grep ^HTTP/ $tmpmeta | tail -n 1)
-  if [ $responsestatus != "200" ] ; then
+  if [ "$responsestatus" != "200" ] ; then
     rm $tmpfile $tmpmeta
     return 1
   fi
@@ -178,7 +187,26 @@ function do_apply_spores() {
   cd $tmpdir && tar xzf /var/lib/spore.tar.gz && spore apply . && cd && rm -rf $tmpdir
 }
 
+function do_check_consistency_of_spores() {
+  if [ $check_consistency_of_spores -eq 0 ] ; then
+    return
+  fi
+  tmpdir=$(mktemp -d)
+  cd $tmpdir
+  tar xzf /var/lib/spore.tar.gz
+  lines=$(spore next . | grep -v ^# | wc -l)
+  cd
+  rm -rf $tmpdir
+  if [ $lines -ne 0 ] ; then
+    echo "Internal consistency check failed; old spores don't match current state."
+    return 1
+  fi
+  return
+}
 
+
+do_verify_spores &&
+do_check_consistency_of_spores &&
 do_download_spores &&
 do_verify_spores &&
 do_apply_spores
