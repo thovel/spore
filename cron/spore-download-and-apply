@@ -94,6 +94,7 @@ if conditional_get $spore_uri /var/lib/spore.tar.gz /var/lib/spore.metadata ; th
 
   if [ $PIPESTATUS != 0 ] ; then
     echo "Ignoring tampered $spore_signature_uri"
+    exit
   fi
 
   tmpdir=$(mktemp -d)
