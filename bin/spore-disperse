@@ -112,9 +112,8 @@ function do_auth_get_permissions_of_role() {
 ##   /dir     /foo.ini  production    /tmp/output  some/identi@fier
 ##   1        2         3             4            5
 ##   <spores> <inifile> <environment> <output-dir> <person-identifier>
-
 function do_auth_process_ssh_permission() {
-  [ ! -d $1/$5 ] && return 1
+  [ ! -d $1/$5 ] && return 0
   targetname=${5/\//-}
   mkdir -p "$4/users/$targetname"
   cp -rp "$1/$5/"* "$4/users/$targetname/"
