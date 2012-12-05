@@ -17,22 +17,65 @@ if [ ! -r /etc/spore-cronjob.conf ] ; then
 	  # GPG ID of the trusted signatures;
 	  spore_signee=123456
 
-	The file will be sourced.
+	The file will be sourced from bash.
 	EOF
   exit 2
 fi
 
-. /etc/spore-cronjob.conf
+function usage() {
+cat <<EOF
+	Usage: $0: [-a] [-d] [-v]
+	  -d : download spores.
+	  -v : verify signature of downloaded spores
+	  -a : apply spores
+	By default, spores are downloaded and applied; if any options are
+	specified, only those options will be used.
+EOF
+}
+
+
+source /etc/spore-cronjob.conf
+
+apply_spores=0
+download_spores=0
+verify_spores=0
+default_operation=1
+
+while [ $# -gt 0 ] ; do
+  if [ "$1" == "-a" ] ; then
+    apply_spores=1
+    default_operation=0
+    shift;
+    continue;
+  fi
+  if [ "$1" == "-d" ] ; then
+    download_spores=1
+    default_operation=0
+    shift;
+    continue;
+  fi
+  if [ "$1" == "-v" ] ; then
+    verify_spores=1
+    default_operation=0
+    shift;
+    continue;
+  fi
+  echo "unknown argument " "${@}"
+  usage
+  exit 2
+done
+
+if [ $default_operation -eq 1 ] ; then
+  apply_spores=1
+  download_spores=1
+  verify_spores=1
+fi
 
 curl_opts="$curl_opts -s"
 
 if [ -z "$spore_uri" ] ; then
   echo "spore_uri mandatory, not set."
   exit 2
-fi
-
-if [ ! -z "$spore_signee" ] ; then
-  gpg_opts="$gpg_opts --trusted-key $spore_signee"
 fi
 
 if [ ! -z "$http_user" ] && [ ! -z "$http_passwd" ] ; then
@@ -84,20 +127,58 @@ function conditional_get() {
     echo "$meta" > $3
   fi
   rm $tmpmeta
-  
 }
 
-if conditional_get $spore_uri /var/lib/spore.tar.gz /var/lib/spore.metadata ; then
-  conditional_get $spore_signature_uri /var/lib/spore.tar.gz.asc /var/lib/spore.asc.metadata
 
-  gpg $gpg_opts --verify /var/lib/spore.tar.gz.asc
+function do_download_spores() {
+  if [ $download_spores -eq 0 ] ; then
+    return 0
+  fi
+  download_skipped=1
+  if conditional_get $spore_uri /var/lib/spore.tar.gz /var/lib/spore.metadata ; then 
+    download_skipped=0
+  fi
+  if conditional_get $spore_signature_uri /var/lib/spore.tar.gz.asc /var/lib/spore.asc.metadata ; then
+    download_skipped=0
+  fi
+  return $download_skipped
+}
 
-  if [ $PIPESTATUS != 0 ] ; then
-    echo "Ignoring tampered $spore_signature_uri"
-    exit
+
+function do_verify_spores() {
+  if [ $verify_spores -eq 0 ] ; then
+    return
   fi
 
+  gpg_status=$(mktemp)
+
+  gpg 2> /dev/null --status-fd 1 $gpg_opts --verify /var/lib/spore.tar.gz.asc > $gpg_status
+
+  if [ $PIPESTATUS != 0 ] ; then
+    echo "GPG exited with nonzero exit code, $spore_signature_uri maybe tampered with."
+    rm $gpg_status
+    return 1
+  fi
+
+  if ! grep GOODSIG.*$spore_signee $gpg_status ; then
+    log "Signature did not match requested signatorees.  $(grep GOODSIGN $gpg_status)."
+    rm $gpg_status
+    return 1
+  fi
+
+  rm $gpg_status
+}
+
+
+function do_apply_spores() {
+  if [ $apply_spores -eq 0 ] ; then
+    return
+  fi
   tmpdir=$(mktemp -d)
   cd $tmpdir && tar xzf /var/lib/spore.tar.gz && spore apply . && cd && rm -rf $tmpdir
-fi
+}
 
+
+do_download_spores &&
+do_verify_spores &&
+do_apply_spores
