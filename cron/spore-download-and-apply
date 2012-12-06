@@ -24,13 +24,34 @@ fi
 
 function usage() {
 cat <<EOF
-	Usage: $0: [-a] [-d] [-v]
-	  -c : Check consistency of current state.
-	  -d : download spores.
-	  -v : verify signature of downloaded spores
+	Usage: $0: [-a] [-c] [-d] [-v]
 	  -a : apply spores
+	  -c : Check consistency of current state.
+	  -d : download spores if they have changed
+	  -v : verify signature of spores
+
 	By default, spores are downloaded and applied; if any options are
 	specified, only those options will be used.
+
+	The operations always run in this order:
+	  1. verify existing spores  (-v)
+	  2. consistency check       (-c)
+	  3. download new spores     (-d)
+	  4. verify new spores       (-v)
+	  5. apply new spores        (-a)
+
+	$0 is designed to be run as a cron job; as often as you feel it's
+	necessary; either in hourly or daily, or maybe every few minutes.
+
+	The "normal" state is that the spores have been downloaded and have
+	been applied cleanly; in this state, the command will by default
+	check consistency and do a conditional download of the spores; an
+	operation that usually takes well less than a second of CPU time.
+
+	Example crontab:
+
+	  7-57/10 * * * * /usr/sbin/spore-download-and-apply
+
 EOF
 }
 
