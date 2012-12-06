@@ -86,7 +86,7 @@ gets to be in the `adm` group, which has sudo privileges.
 About the tools
 ===============
 
-There are two tools.  `spore` and `spore-disperse`.
+There are three tools.  `spore`, `spore-disperse` and `spore-download-and-apply`.
 
 `spore`
 -------
@@ -147,6 +147,123 @@ directory would be dispersed into smaller spores, with different and
 perhaps overlapping subsets of the full user directory.  Users with
 administrative rights in one spore might have little or no rights in
 a different spore.
+
+
+`spore-download-and-apply`
+--------------------------
+
+The command `spore-download-and-apply` is designed to run by cron,
+and is a wrapper around `spore apply` which additionally:
+
+ * downloads a tarball of spores from a configured URI
+ * verifies that spores have been signed by a specific gpg key
+ * performs consistency checks to ensure that the system hasn't
+   changed in ways that spore doesn't like
+
+### Conf file
+
+The command requires a simple .conf file called
+`/etc/spore-cronjob.conf` which specifies where and how to get spores
+and what gpg key to verify.
+
+
+    # The URI of a .tar.gz file containing spores
+    spore_uri=http://some/ur/of/a/spore.tar.gz
+
+    # The URI of the signature, defaults to "$spore_uri.asc"
+    # spore_signature_uri=http://some/ur/of/a/spore.asc
+
+    # If the spore or signature are protected by password, specify them here
+    # http_user=someuser
+    # http_passwd=somepasswd
+    # http_proxy=someproxy:3128
+    # https_proxy=someproxy:3128
+
+    # GPG ID of the trusted signatures;
+    spore_signee=123456ABCDEF
+
+The conf-file is a bash script, and will be sourced, so it may
+contain shell expressions.
+
+### Operation
+
+The operations always run in this order:
+
+1. verify existing spores  (-v)
+2. consistency check       (-c)
+3. download new spores     (-d)
+4. verify new spores       (-v)
+5. apply new spores        (-a)
+
+If no options are passed, all steps are run, which makes it possible
+to install it as a symlink to e.g. `/etc/cron.hourly/`.  If it is
+desirable to do this more often, then it's possible to write crontab
+files that invoke the desired functionality:
+
+    # Calculate the current state of spores every 5 minutes to update
+    # /etc/motd.tail
+    */5 * * * * /usr/sbin/spore-download-and-apply -c > /etc/motd.tail
+
+### Verification step
+
+Verification has to do with ensuring that the spores that are being
+applied originate from a trusted source. The insecure nature of
+downloading content over http or https requires an additional layer
+of security.  This is done by verifying that the spore .tar.gz has
+been cryptographically signed by a specific gpg key.
+
+Each .tar.gz is paired with a .tar.gz.asc file (by default in the
+same location, or in another location, if the .conf file specifies
+one); and the .tar.gz /must/ have a valid signature for spore to
+complete the verification step.
+
+If the verification step cannot be completed, the command exits
+immediately.
+
+Verification is disabled if there is no local spore file.
+
+If the conf file specifies a long key ID, the tarball needs to be
+signed by that specific key, not just any key in root's keychain.
+
+For any verification to occur, the signer's public key needs to be
+added to root's keychain:
+
+    # curl -s http://location/of/my-key.asc | gpg --import
+    gpg: key ABCDEF12: "Spore Signer (spore-signer@mycompany.com)" imported
+
+To get the long key ID:
+
+    # gpg --with-colons --list-key ABCDEF12 | grep ^pub | cut -f5 -d:
+    09876543ABCDEF12
+
+The long key identifier (16 characters) uniquely identifies the key
+on the keychain, and can be used to ensure that spores aren't
+accepted unless they're signed by that specific key, regardless of
+what public keys are trusted in root's keychain.
+
+### Consistency check
+
+The consistency check phase ensures that the current spore file
+correctly describes the current state of the system.  If the system
+differs from the spores in such a way that "spore next" says that
+something needs to be done, the consistency check fails.
+
+When the consistency check fails, the command exits immediately.
+
+Consistency checks are disabled if there id no local spore file.
+
+### Download new spores
+
+Downloading new spore files is done conditionally. If the spore
+files are not changed on the servers, no new files are downloaded,
+and the command exits. The next phase only happens if new spores
+arrive.
+
+### Applying spores
+
+The apply phase of the `spore-download-and-apply` command does just
+this: it unpacks the tarball to a temporary directory and runs
+`spore apply` on it, and cleans up after itself.
 
 
 How to use it
