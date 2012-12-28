@@ -24,6 +24,11 @@ EOF
 }
 
 
+## Logs the arguments to a log file
+function log() {
+  logger -t "$(basename "$0")[$$]" -- "${@}"
+}
+
 ## Get the configuration value of a key $3 from section $2 from a
 ## ini-file config file $1, printing the default value $4 if it's
 ## not set.
@@ -287,6 +292,7 @@ function iterate_over_spores() {
       break;
     fi
     eval "${script}"
+    log $script "(rc=$?)"
     oldscript="${script}"
     counter=$((counter + 1))
   done
