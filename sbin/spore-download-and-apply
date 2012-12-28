@@ -1,5 +1,11 @@
 #!/bin/bash
 
+## Logs the arguments to syslog
+function log() {
+  logger -t "$(basename "$0")[$$]" -- "${@}"
+}
+
+
 if [ ! -r /etc/spore-cronjob.conf ] ; then
   cat <<- 'EOF'
 	I need an /etc/spore-cronjob.conf to run. For example
@@ -167,6 +173,7 @@ function do_download_spores() {
   download_skipped=1
   if conditional_get $spore_uri /var/lib/spore.tar.gz /var/lib/spore.metadata ; then 
     download_skipped=0
+    log "New spores downloaded from $spore_uri to /var/lib/spore.tar.gz"
   fi
   if conditional_get $spore_signature_uri /var/lib/spore.tar.gz.asc /var/lib/spore.asc.metadata ; then
     download_skipped=0
@@ -180,22 +187,28 @@ function do_verify_spores() {
     return
   fi
 
+  if [ ! -r /var/lib/spore.tar.gz ] ; then
+    # spores don't exist yet, nothing to verify, nothing to find "invalid"
+    return 0
+  fi
+
   gpg_status=$(mktemp)
 
   gpg 2> /dev/null --status-fd 1 $gpg_opts --verify /var/lib/spore.tar.gz.asc > $gpg_status
-
-  if [ $PIPESTATUS != 0 ] ; then
-    echo "GPG exited with nonzero exit code, $spore_signature_uri maybe tampered with."
+  local rc=$PIPESTATUS
+  if [ $rc != 0 ] ; then
+    log "gpg failed (rc $rc) to verify signature, $spore_signature_uri maybe tampered with."
     rm $gpg_status
     return 1
   fi
 
-  if ! grep GOODSIG.*$spore_signee $gpg_status ; then
-    log "Signature did not match requested signatorees.  $(grep GOODSIGN $gpg_status)."
+  if ! grep -q "GOODSIG.*$spore_signee" $gpg_status ; then
+    log "Signature did not match requested signees.  $(grep GOODSIGN $gpg_status)."
     rm $gpg_status
     return 1
   fi
 
+  log "Good signature from $spore_signee in /var/lib/spore.tar.gz.asc"
   rm $gpg_status
 }
 
@@ -205,6 +218,7 @@ function do_apply_spores() {
     return
   fi
   tmpdir=$(mktemp -d)
+  log "Applying spores"
   cd $tmpdir && tar xzf /var/lib/spore.tar.gz && spore apply . && cd && rm -rf $tmpdir
 }
 
@@ -212,6 +226,11 @@ function do_check_consistency_of_spores() {
   if [ $check_consistency_of_spores -eq 0 ] ; then
     return
   fi
+  if [ ! -r /var/lib/spore.tar.gz ] ; then
+    # No spores downloaded yet, skipping consistency check.
+    return
+  fi
+
   tmpdir=$(mktemp -d)
   cd $tmpdir
   tar xzf /var/lib/spore.tar.gz
@@ -219,7 +238,7 @@ function do_check_consistency_of_spores() {
   cd
   rm -rf $tmpdir
   if [ $lines -ne 0 ] ; then
-    echo "Internal consistency check failed; old spores don't match current state."
+    log "Internal consistency check failed; old spores don't match current state."
     return 1
   fi
   return
@@ -231,3 +250,4 @@ do_check_consistency_of_spores &&
 do_download_spores &&
 do_verify_spores &&
 do_apply_spores
+
