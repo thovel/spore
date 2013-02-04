@@ -245,9 +245,22 @@ function do_check_consistency_of_spores() {
 }
 
 
-do_verify_spores &&
-do_check_consistency_of_spores &&
-do_download_spores &&
-do_verify_spores &&
-do_apply_spores
+if ! do_verify_spores ; then
+  echo "The currently downloaded spores can't be trusted."
+  exit 1
+elif ! do_check_consistency_of_spores ; then
+  echo "The system does not adhere to the currently downloaded spores."
+  exit 1
+elif ! do_download_spores ; then
+  echo "The spores have not changed."
+  exit 0
+elif ! do_verify_spores ; then
+  echo "The downloaded spores can't be trusted."
+  exit 1
+elif ! do_apply_spores ; then
+  echo "The spores failed to apply cleanly."
+  exit 1
+else
+  exit 0
+fi
 
