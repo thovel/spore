@@ -62,17 +62,15 @@ permissions are assigned to each role.
 
     disperse.conf:
     [users]
-      jdoe = operator
+      jdoe = user, operator
       susan = user
 
     [permissions]
-      operator = shell access to production
-      operator = become root on production
-      user = shell access to production
-
-(Note: The syntax is very new, and is in a state of flux; don't count
-on it not changing!  Particular, assigning groups directly might well
-happen.)
+      operator = ssh to production
+      operator = group sudo in production
+      user = group users in production
+      operator = decrypt secrets in production
+      user = decrypt secrets in development
 
 In `[users]` the keys represent directory paths, so e.g. `jdoe`
 refers to `/users/jdoe/person.ini`.
@@ -80,7 +78,10 @@ refers to `/users/jdoe/person.ini`.
 After "dispersing" to `production` you will get two spores defining
 the users jdoe and susan, but with additional information about what
 groups the users should get.  Specifically, jdoe, being an `operator`
-gets to be in the `adm` group, which has sudo privileges.
+gets to be in the `adm` group, which has sudo privileges.  It's also
+possible to ask `spore-disperse` to make a keychain for "development
+secrets" and "production secrets" --- these will contain the gpg keys
+of susan and jdoe, as the .ini file dictates.
 
 
 About the tools
@@ -134,19 +135,29 @@ with the declaration.
 
 Spore-disperse rehashes the original spores it receives, based on the
 definitions passed in on the command line.  The result is a new set
-of spores which more closely fits a specific use case.
+of spores which more closely fits a specific use case, or a more
+specific file depending on the desired output.
 
 The point of dispersing is to allow a common and large directory of
 user information, e.g. for a whole company or organization, while
 at the same time providing spore information for different subsets
 of users different access levels in different systems.
 
-The "root" spore would be the maintained user directory, and for each
-substantial subset of systems that users need access to, the
+The "master" spore would be the maintained user directory, and for
+each substantial subset of systems that users need access to, the
 directory would be dispersed into smaller spores, with different and
 perhaps overlapping subsets of the full user directory.  Users with
 administrative rights in one spore might have little or no rights in
 a different spore.
+
+`spore-disperse` can also be used to create GPG keyring of the users
+with specific roles; this is done by specifying "keyrings:" in front
+of the output directory, as follows:
+
+    keyrings:/var/lib/production-keyrings/
+
+The directory will be created, and keyrings will appear there based
+on the authorizations.
 
 
 `spore-download-and-apply`
@@ -270,16 +281,18 @@ How to use it
 =============
 
 1. Maintain a central, well controlled repository of spores, with
-   user information and public keys
+   user information and public keys (ssh and gpg)
 2. Maintain a few "dispersion" configration files for each of the
    major systems involved
 3. Run the central spores through the dispersions to create per-
    system spores
 4. Package and sign these spores and deliver them to the machines
-   in question
+   in question, and use the keychains to encrypt stuff to groups
+   of users
 5. Finally run `spore apply` on the delivered spores after the
    signature has been verified.
-6. Your users will have access to the system.
+6. Your users will have access to the system, and be able to decrypt
+   messages.
 
 
 Declaration
@@ -299,6 +312,11 @@ The declaration is a directory structure, with the following structure:
 - within the `ssh-keys` directory, any number of public keys may
   be present, either in `.pub` files or in `.blacklisted` files.
 - each ssh key file is a standard `id_rsa.pub` or `id_dsa.pub` file
+- within each user directory, a directory `pgp-keys` should be
+  present
+- within the `pgp-keys` directory, any number of .asc files should be
+  present, containing any number of public keys that should be added
+  to keychains where the user belongs.
 
 
 Examples
@@ -314,6 +332,7 @@ First, an overview of the declaration:
     simple-declaration/users/johndoe@example.com/person.ini
     simple-declaration/users/johndoe@example.com/dotfiles/hgrc
     simple-declaration/users/johndoe@example.com/dotfiles/gitconfig
+    simple-declaration/users/johndoe@example.com/pgp-keys/E73D38BA.asc
     simple-declaration/users/johndoe@example.com/ssh-keys/home.pub
     simple-declaration/users/johndoe@example.com/ssh-keys/laptop-stolen-in-2011.blacklisted
     simple-declaration/users/johndoe@example.com/ssh-keys/work.pub
