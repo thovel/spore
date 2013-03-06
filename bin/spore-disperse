@@ -138,7 +138,7 @@ function do_auth_process_decrypt_permission() {
   [[ $4 == keyring:* ]] || return 0
   local keyring=${4/*:/}/$6.gpg
   mkdir -p $(dirname "$keyring")
-  for key in "$1/$5/gpg-keys/"*.asc ; do
+  for key in "$1/$5/pgp-keys/"*.asc ; do
     [ -r "$key" ] || continue;
     gpg < "$key" \
        --batch \
