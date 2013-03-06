@@ -113,6 +113,8 @@ function do_auth_get_permissions_of_role() {
 ##   1        2         3             4            5
 ##   <spores> <inifile> <environment> <output-dir> <person-identifier>
 function do_auth_process_ssh_permission() {
+  # Do nothing if the output dir is a ":"
+  [[ $4 == *:* ]] && return 0
   [ ! -d $1/$5 ] && return 0
   targetname=${5/\//-}
   mkdir -p "$4/users/$targetname"
@@ -120,6 +122,8 @@ function do_auth_process_ssh_permission() {
 }
 
 function do_auth_process_group_permission() {
+  # Do nothing if the output dir is a ":"
+  [[ $4 == *:* ]] && return 0
   targetname=${5/\//-}
   [ ! -r $4/users/$targetname/person.ini ] && return 0
   groups=$(get "$4/users/$targetname/person.ini" user groups )
@@ -127,6 +131,12 @@ function do_auth_process_group_permission() {
     groups="$6 ${groups}"
     set_ini_value $4/users/$targetname/person.ini user groups "$groups"
   fi
+}
+
+function do_auth_process_decrypt_permission() {
+  [[ $4 == keyring:* ]] || return 0
+  local keyring=${4/*:/}
+  
 }
 
 
@@ -142,7 +152,7 @@ function do_auth_user() {
     do_auth_get_permissions_of_role "$2" "$3" "$role"
   done | sort | uniq
   )
-  for word in ssh group_ ; do
+  for word in ssh group_ decrypt_ ; do
     if grep -q '\b'$word'\b' <<< $permissions ; then
       do_auth_process_${word}_permission "${@}" || return 1
     elif grep -q '\b'$word <<< $permissions ; then
