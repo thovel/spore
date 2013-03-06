@@ -29,7 +29,7 @@ if [ ! -r /etc/spore-cronjob.conf ] ; then
 fi
 
 function usage() {
-cat <<EOF
+cat <<-EOF
 	Usage: $0: [-a] [-c] [-d] [-v]
 	  -a : apply spores
 	  -c : Check consistency of current state.
