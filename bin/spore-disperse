@@ -133,10 +133,20 @@ function do_auth_process_group_permission() {
   fi
 }
 
+# Decrypt means that users' keys are added to a keyring.
 function do_auth_process_decrypt_permission() {
   [[ $4 == keyring:* ]] || return 0
-  local keyring=${4/*:/}
-  
+  local keyring=${4/*:/}/$6.gpg
+  mkdir -p $(dirname "$keyring")
+  for key in "$1/$5/gpg-keys/"*.asc ; do
+    [ -r "$key" ] || continue;
+    gpg < "$key" \
+       --batch \
+       --quiet \
+       --no-default-keyring \
+       --keyring "$keyring" \
+       --import
+  done
 }
 
 
