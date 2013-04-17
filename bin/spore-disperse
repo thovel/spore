@@ -138,6 +138,7 @@ function do_auth_process_decrypt_permission() {
   [[ $4 == keyring:* ]] || return 0
   local keyring=${4/*:/}/$6.gpg
   mkdir -p $(dirname "$keyring")
+  local keys=0
   for key in "$1/$5/pgp-keys/"*.asc ; do
     [ -r "$key" ] || continue;
     local keycount=$(
@@ -158,7 +159,11 @@ function do_auth_process_decrypt_permission() {
        --no-default-keyring \
        --keyring "$keyring" \
        --import
+    keys=$((keys + 1))
   done
+  if [ $keys -eq 0 ] ; then
+    echo "User $5 is missing OpenPGP public keys."
+  fi
 }
 
 
