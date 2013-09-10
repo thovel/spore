@@ -69,8 +69,8 @@ cat <<-EOF
 
 
   target_directory :
-    A directory to store spores. The default is /var/lib/
-    The spores will be named as spore_${config_file#shortname}.tar.gz
+    A directory to store spores. The default is /var/lib/spore/localhost/
+    The spores will be named as spore.tar.gz
 
   if any options are specified, only those options will be used.
   If more than one config_file is specified, "apply new spores" will be skipped.
