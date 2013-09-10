@@ -14,19 +14,23 @@ if [ ! -r /etc/spore-cronjob.conf ] ; then
   The filename is used to discover the default sporename
   For this reason, a spore configuration file name must allways adhere to ^spore-[a-z]{2,20}.conf$  
 
-  The following variables are available during the run of this command
+  The following variables are used during the run of this command
 
-  sporename=^spore-([a-z]{2,20}).conf$
-  target_directory=/var/lib/spore/${sporename}/
+  spore_conf_file_name=spore-*******.conf
+  spore_name=^spores-([a-z]{2,20}).conf$
+  spore_file_name=${spore_name}.tar.gz
+  spore_target_directory=/var/lib/spore/
 
   for example this would be true:
-  spore-cocacola.conf
-  sporename=^spore-cocacola.conf$
-  target_directory=/var/lib/spore/cocacola/
+  spore_conf_file_name=spore-cocacola.conf
+  spore_name=cocacola
+  spore_file=cocacola.tar.gz
+  spore_target_directory=/var/lib/spore/
 
   The contents of a configuration file should be:
 
-    # both sporename and target_directory can be overriidden
+    # spore_name and target_directory can be overriidden
+    # spore_conf_file_name and spore_file cannot be overridden
 
     # The actions to run if no parameters are given
     actions="verify consistency-check download verify apply"
@@ -66,11 +70,6 @@ cat <<-EOF
   config_file :
     A path to a file that contains configuration information.
     default /etc/spore-localhost.conf
-
-
-  target_directory :
-    A directory to store spores. The default is /var/lib/spore/localhost/
-    The spores will be named as spore.tar.gz
 
   if any options are specified, only those options will be used.
   If more than one config_file is specified, "apply new spores" will be skipped.
