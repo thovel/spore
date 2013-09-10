@@ -8,12 +8,19 @@ function log() {
 
 if [ ! -r /etc/spore-cronjob.conf ] ; then
   cat <<- 'EOF'
-	I need a configuration file to run
+  I need a configuration file to run
   My default is /etc/spore-cronjob.conf
   The contents of a configuration file should be:
 
-	  # The URI of a .tar.gz file containing spores
-	  spore_uri=http://some/ur/of/a/spore.tar.gz
+    # A code to identify the spore as part of default codes like filenames and user group names
+    # It should adhere to [a-z]{2,20}
+    shortname=somecompany
+
+    # The actions to run if no parameters are given
+    actions="verify consistency-check download verify apply"
+
+    # The URI of a .tar.gz file containing spores
+    spore_uri=http://some/ur/of/a/spore.tar.gz
 
     # The URI of the signature, defaults to "${spore_uri}.asc"
 	  # spore_signature_uri=http://some/ur/of/a/spore.tar.gz.asc
@@ -30,9 +37,6 @@ if [ ! -r /etc/spore-cronjob.conf ] ; then
     # - adhere to [0-1A-F]{40}
 	  spore_signee=123456
 
-    # A code to identify the customer as part of default codes like filenames and user group names
-    # It should adhere to [a-z]{2,12}
-    customer_shortname=somecompany
     
 
 	The file will be sourced from bash.
@@ -55,7 +59,7 @@ cat <<-EOF
 
   target_directory :
     A directory to store spores. The default is /var/lib/
-    The spores will be named as spore_${config_file#customer_shortname}.tar.gz
+    The spores will be named as spore_${config_file#shortname}.tar.gz
 
   if any options are specified, only those options will be used.
   If more than one config_file is specified, "apply new spores" will be skipped.
