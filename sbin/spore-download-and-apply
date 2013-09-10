@@ -8,20 +8,32 @@ function log() {
 
 if [ ! -r /etc/spore-cronjob.conf ] ; then
   cat <<- 'EOF'
-	I need an /etc/spore-cronjob.conf to run. For example
+	I need a configuration file to run
+  My default is /etc/spore-cronjob.conf
+  The contents of a configuration file should be:
 
 	  # The URI of a .tar.gz file containing spores
 	  spore_uri=http://some/ur/of/a/spore.tar.gz
 
-          # The URI of the signature, defaults to "$spore_uri.asc"
-	  # spore_signature_uri=http://some/ur/of/a/spore.asc
+    # The URI of the signature, defaults to "${spore_uri}.asc"
+	  # spore_signature_uri=http://some/ur/of/a/spore.tar.gz.asc
 
 	  # If the spore or signature are protected by password, specify them here
+    # if ther http_user is empty or only has whitespace, no credentials will be sent added to the request
 	  http_user=someuser
 	  http_passwd=somepasswd
 
-	  # GPG ID of the trusted signatures;
+	  # GPG ID of the trusted signatures.
+    # This keys should be confugures as:
+    # - available in the keyring 
+    # - have a trustlevel of "full" or be signed by enough trusted keys.
+    # - adhere to [0-1A-F]{40}
 	  spore_signee=123456
+
+    # A code to identify the customer as part of default codes like filenames and user group names
+    # It should adhere to [a-z]{2,12}
+    customer_shortname=somecompany
+    
 
 	The file will be sourced from bash.
 	EOF
@@ -30,14 +42,23 @@ fi
 
 function usage() {
 cat <<-EOF
-	Usage: $0: [-a] [-c] [-d] [-v]
+	Usage: $0: [-a] [-c] [-d] [-v] config_file target_directory
 	  -a : apply spores
 	  -c : Check consistency of current state.
 	  -d : download spores if they have changed
 	  -v : verify signature of spores
 
-	By default, spores are downloaded and applied; if any options are
-	specified, only those options will be used.
+  config_file :
+    A path to a file that contains configuration information.
+    default /etc/spore-localhost.conf
+
+  target_directory :
+    A directory to store spores. The default is /var/lib/
+    The spores will be named as spore_${config_file#customer_shortname}.tar.gz
+
+  if any options are specified, only those options will be used.
+  If more than one config_file is specified, "apply new spores" will be skipped.
+  a consistency check and verification is allways executed before "apply new spores"
 
 	The operations always run in this order:
 	  1. verify existing spores  (-v)
