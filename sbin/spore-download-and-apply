@@ -12,20 +12,16 @@ if [ ! -r /etc/spore-cronjob.conf ] ; then
   By default this command will look for a file called spore-localhost.conf
 
   The filename is used to discover the default sporename
-  For this reason, a spore configuration file name must allways adhere to ^spore-[a-z]{2,20}.conf$  
+  For this reason, a spore configuration file name must allways adhere to ^[a-z]{2,20}.conf$  
 
   The following variables are used during the run of this command
 
-  spore_conf_file_name=spore-*******.conf
-  spore_name=^spores-([a-z]{2,20}).conf$
-  spore_file_name=${spore_name}.tar.gz
-  spore_target_directory=/var/lib/spore/
+  If our spore name is cocacola then:
 
-  for example this would be true:
-  spore_conf_file_name=spore-cocacola.conf
-  spore_name=cocacola
-  spore_file=cocacola.tar.gz
-  spore_target_directory=/var/lib/spore/
+  - spore_conf_file_name=spore-cocacola.conf
+  - spore_name=cocacola
+  - spore_file=cocacola.tar.gz
+  - spore_target_directory=/var/lib/spore/
 
   The contents of a configuration file should be:
 
@@ -61,7 +57,7 @@ fi
 
 function usage() {
 cat <<-EOF
-	Usage: $0: [-a] [-c] [-d] [-v] [config_file[,config_file]]
+	Usage: $0: [-a] [-c] [-d] [-v] [config_file[ config_file]]
 	  -a : apply spores
 	  -c : Check consistency of current state.
 	  -d : download spores if they have changed
@@ -69,7 +65,7 @@ cat <<-EOF
 
   config_file :
     A path to a file that contains configuration information.
-    default /etc/spore-localhost.conf
+    default: /etc/spore/localhost.conf
 
   if any options are specified, only those options will be used.
   If more than one config_file is specified, "apply new spores" will be
