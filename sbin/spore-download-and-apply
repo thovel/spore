@@ -42,7 +42,7 @@ fi
 
 function usage() {
 cat <<-EOF
-	Usage: $0: [-a] [-c] [-d] [-v] config_file[,config_file] target_directory
+	Usage: $0: [-a] [-c] [-d] [-v] [config_file[,config_file] target_directory]
 	  -a : apply spores
 	  -c : Check consistency of current state.
 	  -d : download spores if they have changed
