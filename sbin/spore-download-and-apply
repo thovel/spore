@@ -72,7 +72,8 @@ cat <<-EOF
     default /etc/spore-localhost.conf
 
   if any options are specified, only those options will be used.
-  If more than one config_file is specified, "apply new spores" will be skipped.
+  If more than one config_file is specified, "apply new spores" will be
+  applied on the first conf file only.
   a consistency check and verification is allways executed before "apply new spores"
 
 	The operations always run in this order:
