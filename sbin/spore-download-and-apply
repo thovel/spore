@@ -158,14 +158,13 @@ function do_check_consistency_of_spores() {
   if [ $check_consistency_of_spores -eq 0 ] ; then
     return
   fi
-  if [ ! -r /var/lib/spore.tar.gz ] ; then
+  if [ ! -r $spore_file_path ] ; then
     # No spores downloaded yet, skipping consistency check.
     return
   fi
 
   tmpdir=$(mktemp -d)
   cd $tmpdir
-#  tar xzf /var/lib/spore.tar.gz
   tar xzf $spore_file_path
   lines=$(spore next . | grep -v ^# | wc -l)
   cd
