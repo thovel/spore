@@ -1,59 +1,21 @@
 #!/bin/bash
 
+spore_conf_file_name=noname
+spore_name=noname
+spore_file=nofile
+spore_target_directory=nodir
+spore_file_path=nopath
+spore_signature_file_path=nopath
+spore_metadata_file_path=nopath
+spore_signature_metadata_file_path=nopath
+
+
 ## Logs the arguments to syslog
 function log() {
   logger -t "$(basename "$0")[$$]" -- "${@}"
 }
 
 
-if [ ! -r /etc/spore-cronjob.conf ] ; then
-  cat <<- 'EOF'
-
-  By default this command will look for a file called spore-localhost.conf
-
-  The filename is used to discover the default sporename
-  For this reason, a spore configuration file name must allways adhere to ^[a-z]{2,20}.conf$  
-
-  The following variables are used during the run of this command
-
-  If our spore name is cocacola then:
-
-  - spore_conf_file_name=spore-cocacola.conf
-  - spore_name=cocacola
-  - spore_file=cocacola.tar.gz
-  - spore_target_directory=/var/lib/spore/
-
-  The contents of a configuration file should be:
-
-    # spore_name and target_directory can be overriidden
-    # spore_conf_file_name and spore_file cannot be overridden
-
-    # The actions to run if no parameters are given
-    actions="verify consistency-check download verify apply"
-
-    # The URI of a .tar.gz file containing spores
-    spore_uri=http://some/ur/of/a/spore.tar.gz
-
-    # The URI of the signature, defaults to "${spore_uri}.asc"
-	  # spore_signature_uri=http://some/ur/of/a/spore.tar.gz.asc
-
-	  # If the spore or signature are protected by password, specify them here
-    # if ther http_user is empty or only has whitespace, no credentials will be sent added to the request
-	  http_user=someuser
-	  http_passwd=somepasswd
-
-	  # GPG ID of the trusted signatures.
-    # This keys should be confugures as:
-    # - available in the keyring 
-    # - have a trustlevel of "full" or be signed by enough trusted keys.
-    # - adhere to [0-1A-F]{40}
-	  spore_signee=0123456789ABCDEF0123456789ABCDEF01234567
-
-
-	The file will be sourced from bash.
-	EOF
-  exit 2
-fi
 
 function usage() {
 cat <<-EOF
@@ -93,69 +55,6 @@ cat <<-EOF
 
 EOF
 }
-
-
-source /etc/spore-cronjob.conf
-
-check_consistency_of_spores=0
-apply_spores=0
-download_spores=0
-verify_spores=0
-default_operation=1
-
-while [ $# -gt 0 ] ; do
-  if [ "$1" == "-a" ] ; then
-    apply_spores=1
-    default_operation=0
-    shift;
-    continue;
-  fi
-  if [ "$1" == "-d" ] ; then
-    download_spores=1
-    default_operation=0
-    shift;
-    continue;
-  fi
-  if [ "$1" == "-c" ] ; then
-    check_consistency_of_spores=1
-    default_operation=0
-    shift;
-    continue;
-  fi
-  if [ "$1" == "-v" ] ; then
-    verify_spores=1
-    default_operation=0
-    shift;
-    continue;
-  fi
-  echo "unknown argument " "${@}"
-  usage
-  exit 2
-done
-
-if [ $default_operation -eq 1 ] ; then
-  check_consistency_of_spores=1
-  apply_spores=1
-  download_spores=1
-  verify_spores=1
-fi
-
-curl_opts="$curl_opts -s"
-
-if [ -z "$spore_uri" ] ; then
-  echo "spore_uri mandatory, not set."
-  exit 2
-fi
-
-if [ ! -z "$http_user" ] && [ ! -z "$http_passwd" ] ; then
-  curl_opts="$curl_opts --user $http_user:$http_passwd"
-elif [ ! -z "$http_user" ] ; then
-  curl_opts="$curl_opts --user $http_user"
-fi
-
-if [ -z "$spore_signature_uri" ] ; then
-  spore_signature_uri="$spore_uri.asc"
-fi
 
 # Conditionally download $1 to $2 using $3 as metadata.
 function conditional_get() {
@@ -203,12 +102,13 @@ function do_download_spores() {
   if [ $download_spores -eq 0 ] ; then
     return 0
   fi
+
   download_skipped=1
-  if conditional_get $spore_uri /var/lib/spore.tar.gz /var/lib/spore.metadata ; then 
+  if conditional_get $spore_uri $spore_file_path $spore_metadata_file_path ; then 
     download_skipped=0
-    log "New spores downloaded from $spore_uri to /var/lib/spore.tar.gz"
+    log "New spores downloaded from $spore_uri to $spore_file_path"
   fi
-  if conditional_get $spore_signature_uri /var/lib/spore.tar.gz.asc /var/lib/spore.asc.metadata ; then
+  if conditional_get $spore_signature_uri $spore_signature_file_path $spore_signature_metadata_file_path ; then
     download_skipped=0
   fi
   return $download_skipped
@@ -220,14 +120,13 @@ function do_verify_spores() {
     return
   fi
 
-  if [ ! -r /var/lib/spore.tar.gz ] ; then
+  if [ ! -r $spore_file_path ] ; then
     # spores don't exist yet, nothing to verify, nothing to find "invalid"
     return 0
   fi
 
   gpg_status=$(mktemp)
-
-  gpg 2> /dev/null --status-fd 1 $gpg_opts --verify /var/lib/spore.tar.gz.asc > $gpg_status
+  gpg 2> /dev/null --status-fd 1 $gpg_opts --verify $spore_signature_file_path > $gpg_status
   local rc=$PIPESTATUS
   if [ $rc != 0 ] ; then
     log "gpg failed (rc $rc) to verify signature, $spore_signature_uri maybe tampered with."
@@ -241,7 +140,7 @@ function do_verify_spores() {
     return 1
   fi
 
-  log "Good signature from $spore_signee in /var/lib/spore.tar.gz.asc"
+  log "Good signature from $spore_signee in ${spore_signature_file_path}"
   rm $gpg_status
 }
 
@@ -252,7 +151,7 @@ function do_apply_spores() {
   fi
   tmpdir=$(mktemp -d)
   log "Applying spores"
-  cd $tmpdir && tar xzf /var/lib/spore.tar.gz && spore apply . && cd && rm -rf $tmpdir
+  cd $tmpdir && tar xzf $spore_file_path && spore apply . && cd && rm -rf $tmpdir
 }
 
 function do_check_consistency_of_spores() {
@@ -266,7 +165,8 @@ function do_check_consistency_of_spores() {
 
   tmpdir=$(mktemp -d)
   cd $tmpdir
-  tar xzf /var/lib/spore.tar.gz
+#  tar xzf /var/lib/spore.tar.gz
+  tar xzf $spore_file_path
   lines=$(spore next . | grep -v ^# | wc -l)
   cd
   rm -rf $tmpdir
@@ -278,22 +178,181 @@ function do_check_consistency_of_spores() {
 }
 
 
+function doit {
+
+
+  
+if [ $default_operation -eq 1 ] ; then
+  check_consistency_of_spores=1
+  apply_spores=1
+  download_spores=1
+  verify_spores=1
+fi
+
+curl_opts="$curl_opts -s"
+
+if [ -z "$spore_uri" ] ; then
+  echo "spore_uri mandatory, not set."
+  exit 2
+fi
+
+if [ ! -z "$http_user" ] && [ ! -z "$http_passwd" ] ; then
+  curl_opts="$curl_opts --user $http_user:$http_passwd"
+elif [ ! -z "$http_user" ] ; then
+  curl_opts="$curl_opts --user $http_user"
+fi
+
+if [ -z "$spore_signature_uri" ] ; then
+  spore_signature_uri="$spore_uri.asc"
+fi
+
+
 if ! do_verify_spores ; then
   echo "The currently downloaded spores can't be trusted."
-  exit 1
+  echo "exit 1"
 elif ! do_check_consistency_of_spores ; then
   echo "The system does not adhere to the currently downloaded spores."
-  exit 1
+  echo "exit 1"
 elif ! do_download_spores ; then
   echo "The spores have not changed."
-  exit 0
+  echo "exit 0"
 elif ! do_verify_spores ; then
   echo "The downloaded spores can't be trusted."
-  exit 1
+  echo "exit 1"
 elif ! do_apply_spores ; then
   echo "The spores failed to apply cleanly."
-  exit 1
+  echo "exit 1"
 else
-  exit 0
+  echo "exit 0"
+fi
+
+}
+
+
+
+check_consistency_of_spores=0
+apply_spores=0
+download_spores=0
+verify_spores=0
+conf_file_argument_count=0
+default_operation=1
+conf_file_arguments=()
+default_conf_file=1
+
+
+
+while [ $# -gt 0 ] ; do
+
+  if [[ ! $1 =~ ^[a-z]{2,20}\.conf$ ]] ; then
+    echo "the filename of $1 must be lowercase characters and have .conf as an extention"
+    usage
+    exit 2
+  fi
+  
+  if [ -f $1 ] ; then
+    echo "$1 is a file"
+    default_conf_file=0
+    conf_file_argument_count=conf_file_argument_count+1
+    conf_file_arguments+=($1)
+    shift;
+    continue;
+  else
+    echo "$1 is not a file"
+    usage
+    exit 2
+  fi
+  
+done
+
+echo "default_conf_file=$default_conf_file"
+
+if [ $default_conf_file -eq 0 ] ; then
+  for conf_file in "${conf_file_arguments[@]}"
+  do
+    echo "source $conf_file"
+
+
+    spore_conf_file_name=$conf_file
+    spore_name=$(echo $spore_conf_file_name | sed -n 's/\(.*\)\.conf/\1/p')
+    spore_target_directory=/var/lib/spore/
+
+    echo "default spore_name: $spore_name"
+    echo "default spore_target_directory: $spore_target_directory"
+
+    source $conf_file
+
+    spore_file="${spore_name}.tar.gz"
+    spore_file_path="${spore_target_directory}${spore_file}"
+    spore_signature_file_path="${spore_file_path}.asc" 
+    spore_metadata_file_path="${spore_target_directory}${spore_name}.metadata"
+    spore_signature_metadata_file_path="${spore_target_directory}${spore_name}.asc.metadata"
+   
+    echo "spore_name: $spore_name"
+    echo "spore_target_directory: $spore_target_directory"
+    echo "spore_conf_file_name: $spore_conf_file_name"
+    echo "spore_file: $spore_file"
+    echo "spore_file_path: $spore_file_path"
+    echo "spore_signature_file_path: $spore_signature_file_path"
+    echo "spore_metadata_file_path: $spore_metadata_file_path"
+    echo "spore_signature_metadata_file_path: $spore_signature_metadata_file_path"
+
+    doit
+  done
+else
+
+  if [ -r /etc/spore/localhost.conf ] ; then
+    source /etc/spore/localhost.conf
+  else
+    cat <<- 'EOF'
+
+  By default this command will look for a file: /etc/spore/localhost.conf
+  You can also put it somewhere else but we appreciate a .../spore/*.conf pattern
+
+  The filename is used to discover the default sporename
+  For this reason, a spore configuration file name must allways adhere to ^[a-z]{2,20}.conf$  
+
+  The following variables are used during the run of this command
+
+  If our spore name is cocacola then:
+
+  - spore_conf_file_name=spore-cocacola.conf
+  - spore_name=cocacola
+  - spore_file=cocacola.tar.gz
+  - spore_target_directory=/var/lib/spore/
+
+  The contents of a configuration file should be:
+
+    # spore_name and target_directory can be overriidden
+    # spore_conf_file_name and spore_file cannot be overridden
+
+    # The actions to run if no parameters are given
+    actions="verify consistency-check download verify apply"
+
+    # The apply hook used
+    apply-hook=ubuntuusers
+
+    # The URI of a .tar.gz file containing spores
+    spore_uri=http://some/ur/of/a/spore.tar.gz
+
+    # The URI of the signature, defaults to "${spore_uri}.asc"
+	  # spore_signature_uri=http://some/ur/of/a/spore.tar.gz.asc
+
+	  # If the spore or signature are protected by password, specify them here
+    # if ther http_user is empty or only has whitespace, no credentials will be sent added to the request
+	  http_user=someuser
+	  http_passwd=somepasswd
+
+	  # GPG ID of the trusted signatures.
+    # This keys should be confugures as:
+    # - available in the keyring 
+    # - have a trustlevel of "full" or be signed by enough trusted keys.
+    # - adhere to [0-1A-F]{40}
+	  spore_signee=0123456789ABCDEF0123456789ABCDEF01234567
+
+
+	The file will be sourced from bash.
+	EOF
+  exit 2
+  fi
 fi
 
