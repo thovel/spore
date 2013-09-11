@@ -180,14 +180,6 @@ function do_check_consistency_of_spores() {
 function doit {
 
 
-  
-if [ $default_operation -eq 1 ] ; then
-  check_consistency_of_spores=1
-  apply_spores=1
-  download_spores=1
-  verify_spores=1
-fi
-
 curl_opts="$curl_opts -s"
 
 if [ -z "$spore_uri" ] ; then
@@ -295,6 +287,23 @@ if [ $default_conf_file -eq 0 ] ; then
     echo "spore_metadata_file_path: $spore_metadata_file_path"
     echo "spore_signature_metadata_file_path: $spore_signature_metadata_file_path"
 
+
+    if [[ $actions =~ verify ]] ; then
+      verify_spores=1
+    fi
+      
+    if [[ $actions =~ check-consistency ]] ; then
+      check_consistency_of_spores=1
+    fi
+
+    if [[ $actions =~ apply ]] ; then
+      apply_spores=1
+    fi
+
+    if [[ $actions =~ download ]] ; then
+      download_spores=1
+    fi
+    
     doit
   done
 else
@@ -325,7 +334,7 @@ else
     # spore_conf_file_name and spore_file cannot be overridden
 
     # The actions to run if no parameters are given
-    actions="verify consistency-check download verify apply"
+    actions="verify check-consistency download verify apply"
 
     # The apply hook used
     apply-hook=ubuntuusers
