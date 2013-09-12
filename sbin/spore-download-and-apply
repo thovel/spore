@@ -8,7 +8,7 @@ spore_file_path=nopath
 spore_signature_file_path=nopath
 spore_metadata_file_path=nopath
 spore_signature_metadata_file_path=nopath
-
+apply_hook=nohook
 
 ## Logs the arguments to syslog
 function log() {
@@ -111,6 +111,9 @@ function do_download_spores() {
   if conditional_get $spore_signature_uri $spore_signature_file_path $spore_signature_metadata_file_path ; then
     download_skipped=0
   fi
+  if [ $download_skipped -eq 1 ] ; then
+     log "no download needed; $spore_file_path and $spore_uri are identical"
+  fi
   return $download_skipped
 }
 
@@ -144,36 +147,37 @@ function do_verify_spores() {
   rm $gpg_status
 }
 
-
 function do_apply_spores() {
   if [ $apply_spores -eq 0 ] ; then
     return
   fi
   tmpdir=$(mktemp -d)
   log "Applying spores"
-  cd $tmpdir && tar xzf $spore_file_path && spore apply . && cd && rm -rf $tmpdir
+  cd $tmpdir && tar xzf $spore_file_path && $apply_hook apply . && cd && rm -rf $tmpdir
 }
 
 function do_check_consistency_of_spores() {
   if [ $check_consistency_of_spores -eq 0 ] ; then
-    return
+    return 0
   fi
   if [ ! -r $spore_file_path ] ; then
-    # No spores downloaded yet, skipping consistency check.
-    return
+    log "No spores at $spore_file_path, skipping consistency check."
+    return 0
   fi
 
   tmpdir=$(mktemp -d)
   cd $tmpdir
   tar xzf $spore_file_path
-  lines=$(spore next . | grep -v ^# | wc -l)
+  lines=$($apply_hook next . | grep -v ^# | wc -l)
   cd
   rm -rf $tmpdir
   if [ $lines -ne 0 ] ; then
     log "Internal consistency check failed; old spores don't match current state."
     return 1
+  else
+    log "Internal consistency check succeded; old spores match current state."
+    return 0
   fi
-  return
 }
 
 
@@ -200,21 +204,21 @@ fi
 
 if ! do_verify_spores ; then
   echo "The currently downloaded spores can't be trusted."
-  echo "exit 1"
+  exit 1
 elif ! do_check_consistency_of_spores ; then
   echo "The system does not adhere to the currently downloaded spores."
-  echo "exit 1"
+  exit 1
 elif ! do_download_spores ; then
   echo "The spores have not changed."
-  echo "exit 0"
+  exit 0
 elif ! do_verify_spores ; then
   echo "The downloaded spores can't be trusted."
-  echo "exit 1"
+  exit 1
 elif ! do_apply_spores ; then
   echo "The spores failed to apply cleanly."
-  echo "exit 1"
+  exit 1
 else
-  echo "exit 0"
+  exit 0
 fi
 
 }
@@ -230,45 +234,93 @@ default_operation=1
 conf_file_arguments=()
 default_conf_file=1
 
-
+optionparsing=1
 
 while [ $# -gt 0 ] ; do
 
-  if [[ ! $1 =~ ^[a-z]{2,20}\.conf$ ]] ; then
-    echo "the filename of $1 must be lowercase characters and have .conf as an extention"
-    usage
-    exit 2
+  if [[ $1 == -* ]] ; then
+
+    if [[ $optionparsing -eq 0 ]] ; then
+      echo "options staring with a dash cannot be mixed with filenames"
+      usage
+      exit 2
+    fi
+
+    if [ "$1" == "-a" ] ; then
+      apply_spores=1
+      default_operation=0
+    fi
+    if [ "$1" == "-d" ] ; then
+      download_spores=1
+      default_operation=0
+    fi
+    if [ "$1" == "-c" ] ; then
+      check_consistency_of_spores=1
+      default_operation=0
+    fi
+    if [ "$1" == "-v" ] ; then
+      verify_spores=1
+      default_operation=0
+    fi
+
+  else
+    optionparsing=0
+
+    if [[ ! $1 =~ ^[a-z]{2,20}\.conf$ ]] ; then
+      echo "the filename of $1 must be lowercase characters and have .conf as an extention"
+      usage
+      exit 2
+    fi
+  
+    if [ -f $1 ] ; then
+#    echo "$1 is a file"
+      default_conf_file=0
+      conf_file_argument_count=conf_file_argument_count+1
+      conf_file_arguments+=($1)
+    else
+      echo "$1 is not a file"
+      usage
+      exit 2
+    fi
   fi
   
-  if [ -f $1 ] ; then
-    echo "$1 is a file"
-    default_conf_file=0
-    conf_file_argument_count=conf_file_argument_count+1
-    conf_file_arguments+=($1)
-    shift;
-    continue;
-  else
-    echo "$1 is not a file"
-    usage
-    exit 2
-  fi
+  shift;
   
 done
 
-echo "default_conf_file=$default_conf_file"
+if [ $default_operation -eq 0 ] ; then
+
+  if [[ $actions =~ verify ]] ; then
+    verify_spores=1
+  fi
+  
+  if [[ $actions =~ check-consistency ]] ; then
+    check_consistency_of_spores=1
+  fi
+
+  if [[ $actions =~ apply ]] ; then
+    apply_spores=1
+  fi
+  if [[ $actions =~ download ]] ; then
+    download_spores=1
+  fi
+fi
+
+
+#echo "default_conf_file=$default_conf_file"
 
 if [ $default_conf_file -eq 0 ] ; then
   for conf_file in "${conf_file_arguments[@]}"
   do
-    echo "source $conf_file"
+#    echo "source $conf_file"
 
 
     spore_conf_file_name=$conf_file
     spore_name=$(echo $spore_conf_file_name | sed -n 's/\(.*\)\.conf/\1/p')
     spore_target_directory=/var/lib/spore/
 
-    echo "default spore_name: $spore_name"
-    echo "default spore_target_directory: $spore_target_directory"
+#    echo "default spore_name: $spore_name"
+#    echo "default spore_target_directory: $spore_target_directory"
 
     source $conf_file
 
@@ -278,31 +330,16 @@ if [ $default_conf_file -eq 0 ] ; then
     spore_metadata_file_path="${spore_target_directory}${spore_name}.metadata"
     spore_signature_metadata_file_path="${spore_target_directory}${spore_name}.asc.metadata"
    
-    echo "spore_name: $spore_name"
-    echo "spore_target_directory: $spore_target_directory"
-    echo "spore_conf_file_name: $spore_conf_file_name"
-    echo "spore_file: $spore_file"
-    echo "spore_file_path: $spore_file_path"
-    echo "spore_signature_file_path: $spore_signature_file_path"
-    echo "spore_metadata_file_path: $spore_metadata_file_path"
-    echo "spore_signature_metadata_file_path: $spore_signature_metadata_file_path"
+#    echo "spore_name: $spore_name"
+#    echo "spore_target_directory: $spore_target_directory"
+#    echo "spore_conf_file_name: $spore_conf_file_name"
+#    echo "spore_file: $spore_file"
+#    echo "spore_file_path: $spore_file_path"
+#    echo "spore_signature_file_path: $spore_signature_file_path"
+#    echo "spore_metadata_file_path: $spore_metadata_file_path"
+#    echo "spore_signature_metadata_file_path: $spore_signature_metadata_file_path"
 
 
-    if [[ $actions =~ verify ]] ; then
-      verify_spores=1
-    fi
-      
-    if [[ $actions =~ check-consistency ]] ; then
-      check_consistency_of_spores=1
-    fi
-
-    if [[ $actions =~ apply ]] ; then
-      apply_spores=1
-    fi
-
-    if [[ $actions =~ download ]] ; then
-      download_spores=1
-    fi
     
     doit
   done
