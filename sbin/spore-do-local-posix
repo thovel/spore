@@ -2,15 +2,15 @@
 
 function usage() {
 cat <<-EOF
-The spore command is used to seed a system with user accounts, ssh
+A spore-do-* commands are used to seed a system with user accounts, ssh
 public keys, and other things needed in order for a fresh, clean
-machine to be accessible to authorized staff.  Typically spore is
+system to be accessible to authorized staff.  Typically spore-do-* commands are
 invoked as part of the initial set-up scripts, but is also run as a
 cron job to ensure that changes to user accounts or public keys are
 propagated to the systems.
 
 Synopsis:
-  spore [options] <command> <directory>
+  spore-do-* [options] <command> <directory>
 
 <command>: Spore accepts these commands:
   next     shows the next steps that are needed
