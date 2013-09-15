@@ -405,6 +405,8 @@ function iterate_over_spores() {
 function main() {
   local command=$1
   local spores=$2
+  local spore_state_directory=$3
+  local spore_name=$4
   echo "# directory with spores: $spores"
   local spore_name=$3
   if [ "$command" == "" ] ; then
