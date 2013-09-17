@@ -153,7 +153,7 @@ function do_apply_spores() {
   fi
   tmpdir=$(mktemp -d)
   log "Applying spores"
-  cd $tmpdir && tar xzf $spore_file_path && $apply_hook apply . $spore_state_directory $spore_name && cd && rm -rf $tmpdir
+  cd $tmpdir && tar xzf $spore_file_path && $apply_hook apply . $spore_state_directory $spore_name $apply_target && cd && rm -rf $tmpdir
 }
 
 function do_check_consistency_of_spores() {
@@ -168,7 +168,8 @@ function do_check_consistency_of_spores() {
   tmpdir=$(mktemp -d)
   cd $tmpdir
   tar xzf $spore_file_path
-  lines=$($apply_hook next . $spore_state_directory $spore_name | grep -v ^# | wc -l)
+  lines=$($apply_hook next . $spore_state_directory $spore_name $apply_target | grep -v ^# | wc -l)
+  echo "done"
   cd
   rm -rf $tmpdir
   if [ $lines -ne 0 ] ; then

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-gitoliteclone=~/gitolite-admin
+
+gitolite_admin_path=nopath
 
 function usage() {
 cat <<-EOF
@@ -206,8 +207,8 @@ function ensure_gitolite_ssh_keys() {
     
 
     if [ -r "$key" ] ; then
-      ensure_dir_exists "0755" "$gitoliteclone/keydir/${keysubdir}"
-      ensure_key_present $key $gitoliteclone/keydir/${keysubdir}/${user_name}.pub || return 1
+      ensure_dir_exists "0755" "$gitolite_admin_path/keydir/${keysubdir}"
+      ensure_key_present $key $gitolite_admin_path/keydir/${keysubdir}/${user_name}.pub || return 1
     fi
 
     
@@ -219,7 +220,7 @@ function ensure_gitolite_ssh_keys() {
     local keysubdir="${user_name}-$keyname"
 
     if [ -r "$key" ] ; then
-      ensure_key_absent $key $gitoliteclone/keydir/${keysubdir}/${user_name}.pub || return 1
+      ensure_key_absent $key $gitolite_admin_path/keydir/${keysubdir}/${user_name}.pub || return 1
     fi
   done
 
@@ -290,12 +291,12 @@ function ensure_group_membership(){
   ensure_dir_exists "0755" "${gitoliteclone}/conf/groups"
   
   local spore_named_group="${spore_name}-${group}"
-  if [ ! -f "${gitoliteclone}/conf/groups/${spore_named_group}.group" ] ; then
-    echo "echo -n \"@${spore_named_group} = ${user_name}\" > ${gitoliteclone}/conf/groups/${spore_named_group}.group"
+  if [ ! -f "${gitolite_admin_path}/conf/groups/${spore_named_group}.group" ] ; then
+    echo "echo -n \"@${spore_named_group} = ${user_name}\" > ${gitolite_admin_path}/conf/groups/${spore_named_group}.group"
   else
-    grep -q "${user_name}" "${gitoliteclone}/conf/groups/${spore_named_group}.group"
+    grep -q "${user_name}" "${gitolite_admin_path}/conf/groups/${spore_named_group}.group"
     if [ 0 -ne $? ] ; then
-      echo "echo -n \" $user_name\" >> ${gitoliteclone}/conf/groups/${spore_named_group}.group"
+      echo "echo -n \" $user_name\" >> ${gitolite_admin_path}/conf/groups/${spore_named_group}.group"
     fi
   fi
   return;
@@ -366,8 +367,8 @@ function ensure_policy() {
         echo "$script"
         
       fi      
-    else
-      echo "# ignoring non-directory $dir"
+#    else
+#      echo "# ignoring non-directory $dir"
     fi
   done
 }
@@ -392,6 +393,15 @@ function iterate_over_spores() {
     local rc=$?
     [ $rc != 0 ] && local suffix=" (rc=$rc)"
     log "$script$suffix"
+
+    cd $gitolite_admin_path
+    git add -f *
+    gitshortstatus=$(git status -s)
+    if [ ! $gitshortstatus == "" ] ; then
+      git commit -m "spore-do-remote-gitolite"
+      git push
+    fi
+
     oldscript="${script}"
     counter=$((counter + 1))
   done
@@ -400,27 +410,53 @@ function iterate_over_spores() {
   fi
   echo "Complete ($counter commands run)."
 }
+function clean_gitolite_admin_clone() {
+   spore_state_directory=$1
+   apply_target=$2
 
+   cd ${spore_state_directory}
+   if [[ -d gitolite-admin ]] ; then
+     cd gitolite-admin
+     rm -rf *
+     git checkout -qf
+     cd
+   else
+     git clone $apply_target gitolite-admin
+     cd
+   fi
+
+   gitolite_admin_path="${spore_state_directory}gitolite-admin"
+   
+}
 
 function main() {
   local command=$1
   local spores=$2
   local spore_state_directory=$3
   local spore_name=$4
-  echo "# directory with spores: $spores"
-  local spore_name=$3
+  local apply_target=$5
   if [ "$command" == "" ] ; then
     usage
     return 0
   fi
+
   if [[ -z "$spores" || ! -d "$spores" ]] ; then
     echo "You must specify an existing directory to work with."
     return 2
   fi
+
   if [[ -z "$spore_name" || ! $spore_name =~ ^[a-z]{2,20}$ ]] ; then
-    echo "You must specify a spore name that adheres to [a-z]{2,20}"
+    echo "You must specify a spore name ($spore_name) that adheres to [a-z]{2,20}"
     return 2
   fi
+
+  if [[ -z "$apply_target" || ! $apply_target =~ ^ssh:\/\/.*\/gitolite-admin$ ]] ; then
+    echo "You must specify an apply target ($apply_target) that adheres to ^ssh://*.gitolite\-admin$"
+    return 2
+  fi
+
+  clean_gitolite_admin_clone $spore_state_directory $apply_target
+
   if [ "$command" == "next" ] ; then
     ensure_policy "$spores" "$spore_name"
   elif [ "$command" == "apply" ] ; then
