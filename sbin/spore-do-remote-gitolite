@@ -288,7 +288,7 @@ function ensure_group_membership(){
   local spore_name=$2
   local user_name=$3
 
-  ensure_dir_exists "0755" "${gitoliteclone}/conf/groups"
+  ensure_dir_exists "0755" "${gitolite_admin_path}/conf/groups"
   
   local spore_named_group="${spore_name}-${group}"
   if [ ! -f "${gitolite_admin_path}/conf/groups/${spore_named_group}.group" ] ; then
@@ -367,8 +367,8 @@ function ensure_policy() {
         echo "$script"
         
       fi      
-#    else
-#      echo "# ignoring non-directory $dir"
+    else
+      echo "# ignoring non-directory $dir"
     fi
   done
 }
@@ -394,13 +394,13 @@ function iterate_over_spores() {
     [ $rc != 0 ] && local suffix=" (rc=$rc)"
     log "$script$suffix"
 
-    cd $gitolite_admin_path
-    git add -f *
-    gitshortstatus=$(git status -s)
-    if [ ! $gitshortstatus == "" ] ; then
-      git commit -m "spore-do-remote-gitolite"
-      git push
-    fi
+#    cd $gitolite_admin_path
+#    git add -f *
+#    gitshortstatus=$(git status -s)
+#    if [ ! $gitshortstatus == "" ] ; then
+#      git commit -m "spore-do-remote-gitolite"
+#      git push
+#    fi
 
     oldscript="${script}"
     counter=$((counter + 1))
@@ -417,15 +417,13 @@ function clean_gitolite_admin_clone() {
    cd ${spore_state_directory}
    if [[ -d gitolite-admin ]] ; then
      cd gitolite-admin
-     rm -rf *
+     #rm -rf *
      git checkout -qf
      cd
    else
      git clone $apply_target gitolite-admin
      cd
    fi
-
-   gitolite_admin_path="${spore_state_directory}gitolite-admin"
    
 }
 
@@ -455,7 +453,8 @@ function main() {
     return 2
   fi
 
-  clean_gitolite_admin_clone $spore_state_directory $apply_target
+  gitolite_admin_path="${spore_state_directory}gitolite-admin"
+  #clean_gitolite_admin_clone $spore_state_directory $apply_target
 
   if [ "$command" == "next" ] ; then
     ensure_policy "$spores" "$spore_name"
