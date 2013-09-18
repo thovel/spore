@@ -454,7 +454,7 @@ function main() {
   fi
 
   gitolite_admin_path="${spore_state_directory}gitolite-admin"
-  #clean_gitolite_admin_clone $spore_state_directory $apply_target
+  clean_gitolite_admin_clone $spore_state_directory $apply_target
 
   if [ "$command" == "next" ] ; then
     ensure_policy "$spores" "$spore_name"
