@@ -411,17 +411,19 @@ function iterate_over_spores() {
   echo "Complete ($counter commands run)."
 }
 function clean_gitolite_admin_clone() {
-   spore_state_directory=$1
-   apply_target=$2
+   local spore_state_directory=$1
+   local apply_target=$2
 
-   cd ${spore_state_directory}
-   if [[ -d gitolite-admin ]] ; then
-     cd gitolite-admin
-     rm -rf *
+   local gitolite_admin_folder="${spore_state_directory}gitolite-admin"
+
+   if [[ -d $gitolite_admin_folder ]] ; then
+     echo "removing"
+     rm -rf ${gitolite_admin_folder}/*
      git checkout -qf
      cd
    else
-     git clone $apply_target gitolite-admin
+     echo "creating"
+     git clone $apply_target ${gitolite_admin_folder}
      cd
    fi
    
