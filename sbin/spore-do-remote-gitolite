@@ -394,13 +394,17 @@ function iterate_over_spores() {
     [ $rc != 0 ] && local suffix=" (rc=$rc)"
     log "$script$suffix"
 
-    cd $gitolite_admin_path
-    git add -f *
-    gitshortstatus=$(git status -s)
+    local gitolite_admin_folder="${spore_state_directory}gitolite-admin"
+
+    local current_folder=$(pwd)
+    cd ${gitolite_admin_folder}
+    git add *
+    local gitshortstatus=$(git status -s)
     if [ ! "$gitshortstatus" == "" ] ; then
-      git commit -m "spore-do-remote-gitolite VIZRTSAAS-242"
+      git commit -m "spore-do-remote-gitolite #VIZRTSAAS-242"
       git push
     fi
+    cd $current_folder
 
     oldscript="${script}"
     counter=$((counter + 1))
@@ -417,14 +421,13 @@ function clean_gitolite_admin_clone() {
    local gitolite_admin_folder="${spore_state_directory}gitolite-admin"
 
    if [[ -d $gitolite_admin_folder ]] ; then
-     echo "removing"
+     local current_folder=$(pwd)
+     cd ${gitolite_admin_folder}
      rm -rf ${gitolite_admin_folder}/*
-     git checkout -qf
-     cd
+     git checkout -f 
+     cd $current_folder
    else
-     echo "creating"
      git clone $apply_target ${gitolite_admin_folder}
-     cd
    fi
    
 }
