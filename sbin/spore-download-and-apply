@@ -267,7 +267,7 @@ while [ $# -gt 0 ] ; do
   else
     optionparsing=0
 
-    if [[ ! $1 =~ ^[a-z]{2,20}\.conf$ ]] ; then
+    if [[ ! $1 =~ ^.*/[a-z]{2,20}\.conf$ && ! $1 =~ ^[a-z]{2,20}\.conf$ ]] ; then
       echo "the filename of $1 must be lowercase characters and have .conf as an extention"
       usage
       exit 2
@@ -300,7 +300,19 @@ if [ $default_conf_file -eq 0 ] ; then
 
 
     spore_conf_file_name=$conf_file
-    spore_name=$(echo $spore_conf_file_name | sed -n 's/\(.*\)\.conf/\1/p')
+    spore_name_from_path=$(echo $spore_conf_file_name | sed -n 's/.*\/\(.*\)\.conf/\1/p')
+    spore_name_from_file=$(echo $spore_conf_file_name | sed -n 's/\(.*\)\.conf/\1/p')
+    
+    if [ ! -z $spore_name_from_file ] ; then
+      spore_name=$spore_name_from_file
+    fi
+    if [ ! -z $spore_name_from_path ] ; then
+      spore_name=$spore_name_from_path
+    fi
+    if [ -z $spore_name ] ; then
+      echo "no spore_name :-("
+      exit 2
+    fi
     spore_state_directory=/var/lib/spore/
 
 #    echo "default spore_name: $spore_name"
