@@ -310,6 +310,9 @@ function main() {
   local spores=$2
   local spore_state_directory=$3
   local spore_name=$4
+
+  echo "# spore-do-local-posix $1 $2 $3 $4"
+  
   if [ "$command" == "" ] ; then
     usage
     return 0
