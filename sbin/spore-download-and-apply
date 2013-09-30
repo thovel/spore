@@ -219,7 +219,11 @@ function do_apply_spores() {
   fi
   tmpdir=$(mktemp -d)
   log "Applying spores"
-  cd $tmpdir && tar xzf /var/lib/spore.tar.gz && spore apply . && cd && rm -rf $tmpdir
+  cd "$tmpdir" && \
+     tar xzf /var/lib/spore.tar.gz && \
+     spore apply . && \
+     cd - && \
+     rm -rf "$tmpdir"
 }
 
 function do_check_consistency_of_spores() {
