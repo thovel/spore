@@ -62,7 +62,7 @@ function keys() {
   # If you find it, remove everything after the first "="
   # "I" is for case insensitive.
   local result=$(sed -n "/^[[:space:]]*\[$2\]/I,/^\[/ {
-            /^[[:space:]]*[a-z0-9/@:\.]*[[:space:]]*=[[:space:]]*/Is/[[:space:]]*=.*//p
+            /^[[:space:]]*[-a-z0-9/@:\.]*[[:space:]]*=[[:space:]]*/Is/[[:space:]]*=.*//p
           }" "$1" | sort | uniq)
   echo "$result"
 }
