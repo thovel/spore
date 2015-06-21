@@ -237,6 +237,12 @@ function main() {
     echo "You must specify an existing directory to work with."
     return 2
   fi
+
+  if [[ -r "$spores/users" && -d "$spores/users" ]] ; then
+    echo "The first argument: \"$spores\" should point to \"$spores/users\" instead"
+    return 2
+  fi  
+  
   do_auth "${@}"
 }
 
