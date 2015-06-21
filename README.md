@@ -151,10 +151,10 @@ administrative rights in one spore might have little or no rights in
 a different spore.
 
 `spore-disperse` can also be used to create GPG keyring of the users
-with specific roles; this is done by specifying "keyrings:" in front
+with specific roles; this is done by specifying "keyring:" in front
 of the output directory, as follows:
 
-    keyrings:/var/lib/production-keyrings/
+    keyring:/var/lib/production-keyring/
 
 The directory will be created, and keyrings will appear there based
 on the authorizations.
