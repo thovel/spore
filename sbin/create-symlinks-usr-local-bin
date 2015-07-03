@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 dir=$(dirname $0)
-ln -s ${dirname}/../bin/disperse /usr/local/bin/disperse
+ln -s ${dirname}/../bin/spore-disperse /usr/local/bin/spore-disperse
 ln -s ${dirname}/spore /usr/local/bin/spore
 ln -s ${dirname}/spore-download-and-apply /usr/local/bin/spore-download-and-apply 
