@@ -1,5 +1,125 @@
 #!/usr/bin/env bash
-dir=$(dirname $0)
-ln -s ${dirname}/../bin/disperse /usr/local/bin/disperse
-ln -s ${dirname}/spore /usr/local/bin/spore
-ln -s ${dirname}/spore-download-and-apply /usr/local/bin/spore-download-and-apply 
+
+forceReplace=false
+
+function makeFilePathString() {
+
+    local dirName=$1
+    local fileName=$2
+    
+    if [ -z $fileName ]; then
+	echo "$FUNCNAME requires fileName as the first parameter" 1>&2;
+	return 1
+    fi
+    if [ -z $dirName ]; then
+	echo "$FUNCNAME requires dirName as the first parameter" 1>&2;
+	return 1
+    fi
+
+    echo "${dirName}/${fileName}"
+    
+}
+
+function ensureSymLink() {
+
+    local doCreate=false
+    local linkFileExists=false
+    local linkFileIsSymlink=false
+    local linkTargetIsCorrect=false
+    
+
+    local linkPath=$1
+    local linkTarget=$2
+
+    local currentTarget=""
+    
+    if [ -z $linkPath ]; then
+	echo "$FUNCNAME requires linkPath as the first parameter" 1>&2;
+	return 1
+    fi
+    if [ -z $linkTarget ]; then
+	echo "$FUNCNAME requires linkTarget as the first parameter" 1>&2;
+	return 1
+    fi
+
+    echo "$1 $2"  1>&2;
+    
+    
+
+    if [ -h "$linkPath" ]; then
+	linkFileExists=true
+	currentTarget="$(readlink $linkPath)"
+	if [[ "$currentTarget" == "$target_path" ]] ; then
+	    echo "linkfile $linkPath: has correct target $currentTarget"  1>&2;		
+	    linkTargetIsCorrect=true
+	else
+	    if [ ! "$forceReplace" = true ]; then
+		echo "linkfile $linkPath: has wrong target $currentTarget. consider using -f"  1>&2;
+		return 1
+	    else
+		echo "linkfile $linkPath: has wrong target $currentTarget"  1>&2;
+	    fi
+	fi
+    else
+	if [ -f "$linkPath" ]; then
+	    linkFileExists=true
+	    if [ ! "$forceReplace" = true ]; then
+		echo "linkPath $linkPath is a regular file but must be a symlink. consider using -f"  1>&2;
+		return 1
+	    else
+		echo "linkPath $linkPath is a regular file but must be a symlink."  1>&2;
+	    fi
+	else
+      	    if [ -d "$linkPath" ]; then
+		linkFileExists=true
+		if [ ! "$forceReplace" = true ]; then
+		    echo "linkPath $linkPath is a directory bu must be a symlink. consider using -f"  1>&2;		    
+		    return 1
+		else
+		    echo "linkPath $linkPath is a directory bu must be a symlink."  1>&2;		    		    
+		fi
+	    fi
+	fi
+    fi  
+    
+
+    if [ "$linkFileExists" = true  ]; then
+	if [ "$linkTargetIsCorrect" = true ]; then
+	    ## all well
+	    echo "linkfile $linkPath: happy with target $currentTarget"  1>&2;
+	    return 0
+	else
+	    ## replace the link
+	    echo "linkfile $linkPath: changing target $currentTarget to $linkTarget"  1>&2;
+	    ln -f -s "$linkPath" "$linkTarget"
+	fi
+    else
+	echo "creating linkfile $linkPath pointing to $linkTarget"  1>&2;	
+	ln -s "$linkPath" "$linkTarget"
+    fi
+    
+}
+
+targetDirDefault="/usr/local/bin"
+
+disperseFileName="spore-disperse"
+disperseFilePath=$(makeFilePathString "$targetDirDefault" "$disperseFileName")
+
+sporeFileName="spore"
+sporeFilePath=$(makeFilePathString "$targetDirDefault" "$sporeFileName")
+
+downloadAndApplyFileName="spore-download-and-apply"
+downloadAndApplyPath=$(makeFilePathString "$targetDirDefault" "$downloadAndApplyFileName")
+
+
+if [[ "$1" == "-f" ]]; then
+    forceReplace=true
+fi
+
+dirname=$(dirname $0)
+cd ${dirname}
+cd ..
+sporehome=$(pwd)
+ensureSymLink "$disperseFilePath" "${sporehome}/bin/spore-disperse"
+ensureSymLink "$sporeFilePath" "${sporehome}/sbin/spore" 
+ensureSymLink "$downloadAndApplyPath" "${sporehome}/sbin/spore-download-and-apply" 
