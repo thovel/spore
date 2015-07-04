@@ -41,16 +41,12 @@ function ensureSymLink() {
 	echo "$FUNCNAME requires linkTarget as the first parameter" 1>&2;
 	return 1
     fi
-
-    echo "$1 $2"  1>&2;
     
     
-
     if [ -h "$linkPath" ]; then
 	linkFileExists=true
 	currentTarget="$(readlink $linkPath)"
-	if [[ "$currentTarget" == "$target_path" ]] ; then
-	    echo "linkfile $linkPath: has correct target $currentTarget"  1>&2;		
+	if [ "$currentTarget" == "$linkTarget" ] ; then
 	    linkTargetIsCorrect=true
 	else
 	    if [ ! "$forceReplace" = true ]; then
@@ -85,8 +81,6 @@ function ensureSymLink() {
 
     if [ "$linkFileExists" = true  ]; then
 	if [ "$linkTargetIsCorrect" = true ]; then
-	    ## all well
-	    echo "linkfile $linkPath: happy with target $currentTarget"  1>&2;
 	    return 0
 	else
 	    ## replace the link
@@ -94,7 +88,6 @@ function ensureSymLink() {
 	    ln -f -s "$linkTarget" "$linkPath" 
 	fi
     else
-	echo "creating linkfile $linkPath pointing to $linkTarget"  1>&2;	
 	ln -s "$linkTarget" "$linkPath" 
     fi
     
