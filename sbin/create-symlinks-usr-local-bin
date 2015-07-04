@@ -91,11 +91,11 @@ function ensureSymLink() {
 	else
 	    ## replace the link
 	    echo "linkfile $linkPath: changing target $currentTarget to $linkTarget"  1>&2;
-	    ln -f -s "$linkPath" "$linkTarget"
+	    ln -f -s "$linkTarget" "$linkPath" 
 	fi
     else
 	echo "creating linkfile $linkPath pointing to $linkTarget"  1>&2;	
-	ln -s "$linkPath" "$linkTarget"
+	ln -s "$linkTarget" "$linkPath" 
     fi
     
 }
