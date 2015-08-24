@@ -69,29 +69,39 @@ apply_spores=0
 download_spores=0
 verify_spores=0
 default_operation=1
+quiet=true
 
 while [ $# -gt 0 ] ; do
   if [ "$1" == "-a" ] ; then
     apply_spores=1
     default_operation=0
+    quiet=false
     shift;
     continue;
   fi
   if [ "$1" == "-d" ] ; then
     download_spores=1
     default_operation=0
+    quiet=false
     shift;
     continue;
   fi
   if [ "$1" == "-c" ] ; then
     check_consistency_of_spores=1
     default_operation=0
+    quiet=false
     shift;
     continue;
   fi
   if [ "$1" == "-v" ] ; then
     verify_spores=1
     default_operation=0
+    quiet=false
+    shift;
+    continue;
+  fi
+  if [ "$1" == "--verbose" ] ; then
+    quiet=false
     shift;
     continue;
   fi
@@ -250,19 +260,19 @@ function do_check_consistency_of_spores() {
 
 
 if ! do_verify_spores ; then
-  echo "The currently downloaded spores can't be trusted."
+  $quiet || echo "The currently downloaded spores can't be trusted."
   exit 1
 elif ! do_check_consistency_of_spores ; then
-  echo "The system does not adhere to the currently downloaded spores."
+  $quiet || echo "The system does not adhere to the currently downloaded spores."
   exit 1
 elif ! do_download_spores ; then
-  echo "The spores have not changed."
+  $quiet || echo "The spores have not changed."
   exit 0
 elif ! do_verify_spores ; then
-  echo "The downloaded spores can't be trusted."
+  $quiet || echo "The downloaded spores can't be trusted."
   exit 1
 elif ! do_apply_spores ; then
-  echo "The spores failed to apply cleanly."
+  $quiet || echo "The spores failed to apply cleanly."
   exit 1
 else
   exit 0
