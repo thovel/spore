@@ -203,7 +203,7 @@ function do_verify_spores() {
   fi
 
   if ! grep -q "GOODSIG.*$spore_signee" $gpg_status ; then
-    log "Signature did not match requested signees.  $(grep GOODSIGN $gpg_status)."
+    log "Signature did not match requested signees.  $(grep GOODSIG $gpg_status)."
     rm $gpg_status
     return 1
   fi
